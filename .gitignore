@@ -1,0 +1,39 @@
+.Codex/
+.vscode/
+Game Data Dumps/
+MiSans/
+Ulysses/
+Tools/ACI-Font-Tools/output/
+Tools/ACI-Text-Tools/output/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+
+# Python packaging / build outputs
+build/
+dist/
+site/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Vendored/local dependency directories
+Lib/
+lib/
+Lib64/
+Scripts/
+Include/
+share/python-wheels/

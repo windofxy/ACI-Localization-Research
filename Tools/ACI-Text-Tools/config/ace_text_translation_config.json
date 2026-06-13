@@ -1,0 +1,89 @@
+{
+  "paratranz_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/Total.paratranz.json",
+  "target_language": "JP",
+  "fallback_language": "US",
+  "sources": [
+    {
+      "description": "UI Localization 1",
+      "act_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-FileSystem-Research/Tools/ACI-File-Tools/output/FullGame/0xfcc2ac23/0/0.act",
+      "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-FileSystem-Research/Tools/ACI-File-Tools/output/DATA94_Modified/0xfcc2ac23/0/0.act",
+      "unique_charset_items": [
+        {
+          "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/UI Font 3_Futura_MdCn_BT20.charset.txt",
+          "filters": [
+            "InfoHeader_*",
+            "AcName_*",
+            "MsnName_*"
+          ]
+        },
+        {
+          "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/UI Font 1_Futura_MdCn_BT26.charset.txt",
+          "filters": [
+            "MenuHeader_*_*"
+          ]
+        },
+        {
+          "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/UI Font 1_Futura_MdCn_BT62.charset.txt",
+          "filters": [
+            "MsnNameLocal_*"
+          ]
+        },
+        {
+          "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/UI Font 2_Futura_MdCn_BT26.charset.txt",
+          "filters": [
+            "MsnDateDesc_micp*",
+            "MsnDateDesc_miff*",
+            "MsnLocationDesc_micp*"
+          ]
+        }
+      ]
+    },
+    {
+      "description": "UI Localization 2",
+      "act_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-FileSystem-Research/Tools/ACI-File-Tools/output/FullGame/0x375ba2dc/0/160.act",
+      "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-FileSystem-Research/Tools/ACI-File-Tools/output/DATA94_Modified/0x375ba2dc/0/160.act",
+      "unique_charset_items": [
+        {
+          "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/UI Font 1_Futura_MdCn_BT26.charset.txt",
+          "filters": [
+            "MenuHeader_*_*"
+          ]
+        },
+        {
+          "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/UI Font 3_Futura_MdCn_BT20.charset.txt",
+          "filters": [
+            "InfoHeader_*",
+            "InfoItem_AcStat_*",
+            "InfoItem_PartsSlot_*",
+            "InfoItem_WpnStat_*",
+            "PartsSName_*",
+            "InfoItem_WpnDetail_*",
+            "AcTypeName_*"
+          ]
+        }
+      ]
+    },
+    {
+      "description": "Campaign 1 Localization",
+      "act_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-FileSystem-Research/Tools/ACI-File-Tools/output/FullGame/0xe531816b/13.act",
+      "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-FileSystem-Research/Tools/ACI-File-Tools/output/DATA94_Modified/0xe531816b/13.act",
+      "unique_charset_items": [
+        {
+          "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/Campaign 1 Font_A_OTF_Shin_Go_Pr5_R20_radio.charset.txt",
+          "filters": []
+        }
+      ]
+    },
+    {
+      "description": "Movie Localization 1",
+      "act_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-FileSystem-Research/Tools/ACI-File-Tools/output/FullGame/0x375ba2dc/0/155.act",
+      "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-FileSystem-Research/Tools/ACI-File-Tools/output/DATA94_Modified/0x375ba2dc/0/155.act",
+      "unique_charset_items": [
+        {
+          "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/Movie Font_A_OTF_Shin_Go_Pr5_R30_radio.charset.txt",
+          "filters": []
+        }
+      ]
+    }
+  ]
+}

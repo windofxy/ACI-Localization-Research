@@ -1,0 +1,4 @@
+freetype-py
+rectangle-packer
+PyQt5
+Pillow
