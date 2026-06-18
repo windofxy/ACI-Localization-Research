@@ -450,6 +450,60 @@ Practical takeaway for rebuilding today:
 - adding glyphs to one of these blocks should currently be assumed to require deleting the same
   number from the same family unless future runtime reverse-engineering finds a way to raise the cap
 
+## Current Builder-Side Block Metric Reconstruction
+
+The current `ACI-Font-Tools` writer now rebuilds block metrics more conservatively than a plain
+`FreeType face.size.*` copy.
+
+The goal is to avoid under-sized block metrics that can cause some glyphs to disappear or be
+runtime-clipped in-game when a replacement font has outlier ascenders / descenders that exceed the
+font's face-global metrics.
+
+Current writer strategy:
+
+1. Read the template block header metrics:
+   - ascent
+   - descent
+   - max advance
+   - line height
+2. Measure the template block's embedded glyph subset itself:
+   - observed ascent = max glyph `+0x08`
+   - observed descent = max `(ink height - ascent)`
+   - observed max advance = max glyph `+0x0A`
+3. Derive template safety margins:
+   - top margin = `template ascent - observed ascent`
+   - bottom margin = `template descent - observed descent`
+   - advance margin = `template max advance - observed max advance`
+   - line gap = `template line height - template ascent - template descent`
+4. Clamp those margins to non-negative values.
+   - This makes the rebuilt metrics only preserve or enlarge safety room; it never intentionally
+     tightens the block below the template's own observed envelope.
+5. Rasterize the new glyph subset and measure it again from the generated glyphs:
+   - observed ascent = max `bitmap_top`
+   - observed descent = max `(bitmap rows - bitmap_top)`
+   - observed max advance = max rendered advance
+6. Scale the template margins by the ratio between current face line height and template line height.
+7. Rebuild the final block metrics as:
+   - ascent = max(current observed ascent + scaled top margin, current face ascender)
+   - descent = max(current observed descent + scaled bottom margin, current face descender)
+   - max advance = max(current observed max advance + scaled advance margin, current face max advance)
+   - line height = max(ascent + descent + scaled line gap, current face line height)
+
+Practical interpretation:
+
+- Official `.uifont` samples still look face-global at the header level.
+- But for rebuilding custom fonts, the safest approximation is not a raw face-global copy.
+- Preserving the template block's extra headroom is currently a better fit for problematic fonts,
+  especially when only a few glyphs exceed the replacement font's nominal ascender / descender.
+
+Current implementation note:
+
+- This algorithm is intentionally one-way conservative.
+- It can increase block metrics beyond the current glyph subset's tight bbox, but it avoids shrinking
+  them below either:
+  - the current rendered glyph observations, or
+  - the replacement font's face-global metrics.
+
 ## Open Questions
 
 - The exact formula behind metric 2 at block offset `+0x24`

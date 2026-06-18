@@ -11,6 +11,11 @@ Current scope:
 - list hash entries
 - inspect per-language localized strings
 - inspect table columns and per-row values
+- edit `ACETable` cell display values in a working editor page
+- export and import edited `ACETable` JSON snapshots
+- validate edited `ACETable` cells before binary export
+- export edited `ACETable` files by fixed-layout in-place payload overwrite
+- show builder support coverage for the current `ACETable` signature set
 
 ## Run
 

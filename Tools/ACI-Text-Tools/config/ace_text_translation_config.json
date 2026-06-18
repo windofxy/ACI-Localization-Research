@@ -33,7 +33,9 @@
           "filters": [
             "MsnDateDesc_micp*",
             "MsnDateDesc_miff*",
-            "MsnLocationDesc_micp*"
+            "MsnLocationDesc_micp*",
+            "TabHeader_Rslt_*",
+            "InfoItem_RsltScoreDetail_*"
           ]
         }
       ]
@@ -46,7 +48,8 @@
         {
           "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/UI Font 1_Futura_MdCn_BT26.charset.txt",
           "filters": [
-            "MenuHeader_*_*"
+            "MenuHeader_*_*",
+            "MenuItem_Title_*"
           ]
         },
         {
@@ -58,7 +61,8 @@
             "InfoItem_WpnStat_*",
             "PartsSName_*",
             "InfoItem_WpnDetail_*",
-            "AcTypeName_*"
+            "AcTypeName_*",
+            "InfoItem_Title_*"
           ]
         }
       ]
@@ -84,6 +88,12 @@
           "filters": []
         }
       ]
+    },
+    {
+      "description": "UI Localization 1 Ingame",
+      "act_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-FileSystem-Research/Tools/ACI-File-Tools/output/FullGame/0x0ac159b1/0/0.act",
+      "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-FileSystem-Research/Tools/ACI-File-Tools/output/DATA94_Modified/0x0ac159b1/0/0.act",
+      "unique_charset_items": []
     }
   ]
 }

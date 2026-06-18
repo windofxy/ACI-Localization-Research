@@ -221,8 +221,8 @@ class MainWindow(QMainWindow):
 
         tabs = QTabWidget()
         tabs.setDocumentMode(True)
-        tabs.addTab(self._build_font_creation_page(), "UIFont创建")
-        tabs.addTab(self._build_uifont_viewer_page(), "UIFont查看")
+        tabs.addTab(self._build_font_creation_page(), "UIFont Create")
+        tabs.addTab(self._build_uifont_viewer_page(), "UIFont View")
 
         root_layout.addWidget(tabs)
         self.setCentralWidget(root)

@@ -24,6 +24,14 @@ class LVSTColumnType:
     NULL = 0xFF
 
 
+class ACETableDisplayMode:
+    AUTO = "auto"
+    UTF8 = "utf-8"
+    UTF16BE = "utf-16-be"
+    UTF32BE = "utf-32-be"
+    RAW_HEX = "raw-hex"
+
+
 @dataclass(frozen=True)
 class ACETableHeader:
     magic: bytes
@@ -69,6 +77,16 @@ class ACETableContainer:
     @property
     def row_count(self) -> int:
         return len(self.rows)
+
+
+def ace_table_display_mode_labels() -> list[tuple[str, str]]:
+    return [
+        ("Auto", ACETableDisplayMode.AUTO),
+        ("UTF-8", ACETableDisplayMode.UTF8),
+        ("UTF-16BE", ACETableDisplayMode.UTF16BE),
+        ("UTF-32BE", ACETableDisplayMode.UTF32BE),
+        ("Raw Hex", ACETableDisplayMode.RAW_HEX),
+    ]
 
 
 def build_ulysses_ace_table_json_object(container: ACETableContainer) -> list[dict[str, object | None]]:
@@ -188,14 +206,8 @@ def _json_string_from_utf32be_bytes(raw: bytes) -> str:
 
 def _json_value_text(column: ACETableColumn, row: ACETableRow) -> str:
     value = row.values.get(column.hash_id)
-    raw = row.raw_values.get(column.hash_id, b"")
     if column.column_type in {LVSTColumnType.STRING, LVSTColumnType.BUFFER}:
-        if column.element_size == 1:
-            return _json_string_from_utf8_bytes(raw)
-        if column.element_size == 2:
-            return _json_string_from_utf16be_bytes(raw)
-        if column.element_size == 4:
-            return _json_string_from_utf32be_bytes(raw)
+        return json.dumps(format_ace_table_cell_display(column, row, ACETableDisplayMode.AUTO), ensure_ascii=False)
     return json.dumps(value, ensure_ascii=False)
 
 
@@ -259,6 +271,108 @@ def _decode_zero_terminated(raw: bytes, encoding: str, unit_size: int) -> str:
     if not raw:
         return ""
     return raw.decode(encoding, errors="replace")
+
+
+def _format_raw_hex(raw: bytes) -> str:
+    if not raw:
+        return ""
+    return raw.hex(" ")
+
+
+def _looks_like_single_byte_value(raw: bytes) -> bool:
+    return len(raw) == 1
+
+
+def _is_ascii_text_payload(payload: bytes) -> bool:
+    if not payload:
+        return False
+    return all(0x20 <= byte_value <= 0x7E for byte_value in payload)
+
+
+def _decode_zero_terminated_bytes(raw: bytes) -> bytes:
+    return raw.split(b"\x00", 1)[0]
+
+
+def _is_likely_text_string(text: str) -> bool:
+    if not text:
+        return False
+    for char in text:
+        if char in "\t\r\n":
+            continue
+        if not char.isprintable():
+            return False
+    return True
+
+
+def _is_likely_utf8_text_payload(payload: bytes) -> bool:
+    if not payload:
+        return False
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return _is_likely_text_string(text)
+
+
+def infer_ace_table_stringish_display_mode(column: ACETableColumn, row: ACETableRow) -> str:
+    raw = row.raw_values.get(column.hash_id, b"")
+
+    if column.element_size == 2:
+        return ACETableDisplayMode.UTF16BE
+    if column.element_size == 4:
+        return ACETableDisplayMode.UTF32BE
+    if column.element_size != 1:
+        return ACETableDisplayMode.RAW_HEX
+
+    if column.column_type == LVSTColumnType.STRING:
+        if column.element_count <= 1 or _looks_like_single_byte_value(raw):
+            return ACETableDisplayMode.RAW_HEX
+        payload = _decode_zero_terminated_bytes(raw)
+        if _is_likely_utf8_text_payload(payload):
+            return ACETableDisplayMode.UTF8
+        return ACETableDisplayMode.RAW_HEX
+
+    if column.column_type == LVSTColumnType.BUFFER:
+        payload = _decode_zero_terminated_bytes(raw)
+        if _is_likely_utf8_text_payload(payload):
+            return ACETableDisplayMode.UTF8
+        return ACETableDisplayMode.RAW_HEX
+
+    return ACETableDisplayMode.RAW_HEX
+
+
+def _display_stringish_value_auto(column: ACETableColumn, raw: bytes) -> str:
+    fake_row = ACETableRow(index=0, values={}, raw_values={column.hash_id: raw})
+    inferred_mode = infer_ace_table_stringish_display_mode(column, fake_row)
+    if inferred_mode == ACETableDisplayMode.UTF8:
+        return _decode_zero_terminated(raw, "utf-8", 1)
+    if inferred_mode == ACETableDisplayMode.UTF16BE:
+        return _decode_zero_terminated(raw, "utf-16-be", 2)
+    if inferred_mode == ACETableDisplayMode.UTF32BE:
+        return _decode_zero_terminated(raw, "utf-32-be", 4)
+    return _format_raw_hex(raw)
+
+
+def format_ace_table_cell_display(
+    column: ACETableColumn,
+    row: ACETableRow,
+    mode: str = ACETableDisplayMode.AUTO,
+) -> str:
+    raw = row.raw_values.get(column.hash_id, b"")
+    value = row.values.get(column.hash_id)
+
+    if column.column_type in {LVSTColumnType.STRING, LVSTColumnType.BUFFER}:
+        if mode == ACETableDisplayMode.RAW_HEX:
+            return _format_raw_hex(raw)
+        if mode == ACETableDisplayMode.UTF8:
+            return _decode_zero_terminated(raw, "utf-8", 1)
+        if mode == ACETableDisplayMode.UTF16BE:
+            return _decode_zero_terminated(raw, "utf-16-be", 2)
+        if mode == ACETableDisplayMode.UTF32BE:
+            return _decode_zero_terminated(raw, "utf-32-be", 4)
+        return _display_stringish_value_auto(column, raw)
+
+    return "" if value is None else str(value)
 
 
 def _decode_date(value: int) -> str:

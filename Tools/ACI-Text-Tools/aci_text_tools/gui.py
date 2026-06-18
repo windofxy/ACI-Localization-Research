@@ -6,6 +6,7 @@ import traceback
 from pathlib import Path
 
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QAction,
     QAbstractItemView,
@@ -50,7 +51,18 @@ from .ace_text_builder import (
     export_paratranz_translation_charset_for_templates,
     build_applied_paratranz_translation_charset_code_units_partitioned,
 )
-from .ace_table_parser import ACETableContainer, ACETableRow, export_ace_table_json, parse_ace_table
+from .ace_table_builder import export_edited_ace_table
+from .ace_table_builder import summarize_ace_table_builder_support
+from .ace_table_builder import validate_ace_table_edits
+from .ace_table_parser import (
+    ACETableContainer,
+    ACETableDisplayMode,
+    ACETableRow,
+    ace_table_display_mode_labels,
+    export_ace_table_json,
+    format_ace_table_cell_display,
+    parse_ace_table,
+)
 from .ace_text_parser import (
     ACETextContainer,
     ACETextEntry,
@@ -405,6 +417,10 @@ class MainWindow(QMainWindow):
         self.filtered_text_entries: list[ACETextEntry] = []
         self.current_table_container: ACETableContainer | None = None
         self.filtered_table_rows: list[ACETableRow] = []
+        self.current_table_editor_container: ACETableContainer | None = None
+        self.filtered_table_editor_rows: list[ACETableRow] = []
+        self.table_editor_cell_edits: dict[tuple[int, int], str] = {}
+        self._table_editor_updating = False
         self.tabs = QTabWidget()
 
         self.ace_text_file_edit = QLineEdit()
@@ -444,6 +460,7 @@ class MainWindow(QMainWindow):
         self.translation_act_sources_layout.addStretch(1)
 
         self.ace_table_file_edit = QLineEdit()
+        self.ace_table_display_mode_combo = QComboBox()
         self.table_row_filter_edit = QLineEdit()
         self.table_row_filter_edit.setPlaceholderText("Search row index, column hash, or cell value")
         self.table_column_list = QListWidget()
@@ -464,6 +481,35 @@ class MainWindow(QMainWindow):
         self.table_values_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.table_values_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.table_values_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        for label, value in ace_table_display_mode_labels():
+            self.ace_table_display_mode_combo.addItem(label, value)
+        self.ace_table_display_mode_combo.currentIndexChanged.connect(self._refresh_ace_table_display_mode)
+
+        self.ace_table_editor_file_edit = QLineEdit()
+        self.ace_table_editor_display_mode_combo = QComboBox()
+        self.table_editor_row_filter_edit = QLineEdit()
+        self.table_editor_row_filter_edit.setPlaceholderText("Search row index, column hash, or cell value")
+        self.table_editor_row_list = QListWidget()
+        self.table_editor_row_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table_editor_summary_edit = QTextEdit()
+        self.table_editor_summary_edit.setReadOnly(True)
+        self.table_editor_detail_edit = QTextEdit()
+        self.table_editor_detail_edit.setReadOnly(True)
+        self.table_editor_values_table = QTableWidget(0, 4)
+        self.table_editor_values_table.setHorizontalHeaderLabels(["Column", "Type", "Current", "Edited"])
+        self.table_editor_values_table.verticalHeader().setVisible(False)
+        self.table_editor_values_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table_editor_values_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table_editor_values_table.setWordWrap(True)
+        self.table_editor_values_table.setEditTriggers(QAbstractItemView.AllEditTriggers)
+        self.table_editor_values_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table_editor_values_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.table_editor_values_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.table_editor_values_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        for label, value in ace_table_display_mode_labels():
+            self.ace_table_editor_display_mode_combo.addItem(label, value)
+        self.ace_table_editor_display_mode_combo.currentIndexChanged.connect(self._refresh_ace_table_editor_display_mode)
+        self.table_editor_values_table.itemChanged.connect(self._on_table_editor_value_item_changed)
 
         self._ensure_config_dir()
         self._build_ui()
@@ -475,10 +521,11 @@ class MainWindow(QMainWindow):
         root_layout = QVBoxLayout(root)
 
         self.tabs.setDocumentMode(True)
-        self.tabs.addTab(self._build_ace_text_viewer_page(), "ACEText查看")
-        self.tabs.addTab(self._build_ace_table_viewer_page(), "ACETable查看")
+        self.tabs.addTab(self._build_ace_text_viewer_page(), "ACEText View")
+        self.tabs.addTab(self._build_ace_table_viewer_page(), "ACETable View")
+        self.tabs.addTab(self._build_ace_table_editor_page(), "ACETable Edit")
 
-        self.tabs.addTab(self._build_ace_text_translation_page(), "ACEText翻译")
+        self.tabs.addTab(self._build_ace_text_translation_page(), "ACEText Translate")
         root_layout.addWidget(self.tabs)
         self.setCentralWidget(root)
         self.setStatusBar(QStatusBar(self))
@@ -614,11 +661,50 @@ class MainWindow(QMainWindow):
         source_layout.addWidget(browse_button, 0, 2)
         source_layout.addWidget(load_button, 0, 3)
         source_layout.addWidget(export_button, 0, 4)
+        source_layout.addWidget(QLabel("Display"), 1, 0)
+        source_layout.addWidget(self.ace_table_display_mode_combo, 1, 1)
 
         content_splitter = QSplitter(Qt.Horizontal)
         content_splitter.addWidget(self._build_ace_table_left_panel())
         content_splitter.addWidget(self._build_ace_table_right_panel())
         content_splitter.setSizes([420, 900])
+
+        layout.addWidget(source_group)
+        layout.addWidget(content_splitter, stretch=1)
+        return page
+
+    def _build_ace_table_editor_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+
+        source_group = QGroupBox("ACETable Editor Source")
+        source_layout = QGridLayout(source_group)
+        browse_button = self._make_button("Select File", self._browse_ace_table_editor_file)
+        load_button = self._make_button("Load", self._load_ace_table_editor_from_edit)
+        use_viewer_button = self._make_button("Use Viewer File", self._use_current_viewer_ace_table_for_editor)
+        import_json_button = self._make_button("Import Edited JSON", self._import_ace_table_editor_json)
+        export_button = self._make_button("Export Edited JSON", self._export_ace_table_editor_json)
+        validate_button = self._make_button("Validate Edits", self._validate_ace_table_editor_edits)
+        export_lvst_button = self._make_button("Export LVST", self._export_ace_table_editor_lvst)
+        clear_all_button = self._make_button("Clear All Edits", self._clear_all_ace_table_editor_edits)
+        self.ace_table_editor_file_edit.returnPressed.connect(self._load_ace_table_editor_from_edit)
+        source_layout.addWidget(QLabel("ACETable"), 0, 0)
+        source_layout.addWidget(self.ace_table_editor_file_edit, 0, 1)
+        source_layout.addWidget(browse_button, 0, 2)
+        source_layout.addWidget(load_button, 0, 3)
+        source_layout.addWidget(use_viewer_button, 0, 4)
+        source_layout.addWidget(import_json_button, 0, 5)
+        source_layout.addWidget(export_button, 0, 6)
+        source_layout.addWidget(validate_button, 0, 7)
+        source_layout.addWidget(export_lvst_button, 0, 8)
+        source_layout.addWidget(QLabel("Display"), 1, 0)
+        source_layout.addWidget(self.ace_table_editor_display_mode_combo, 1, 1)
+        source_layout.addWidget(clear_all_button, 1, 8)
+
+        content_splitter = QSplitter(Qt.Horizontal)
+        content_splitter.addWidget(self._build_ace_table_editor_left_panel())
+        content_splitter.addWidget(self._build_ace_table_editor_right_panel())
+        content_splitter.setSizes([420, 920])
 
         layout.addWidget(source_group)
         layout.addWidget(content_splitter, stretch=1)
@@ -669,6 +755,30 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self._build_table_detail_panel())
         splitter.addWidget(self._build_table_values_panel())
         splitter.setSizes([320, 220, 360])
+
+        layout.addWidget(splitter)
+        return panel
+
+    def _build_ace_table_editor_left_panel(self) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+
+        splitter = QSplitter(Qt.Vertical)
+        splitter.addWidget(self._build_table_editor_row_panel())
+        splitter.addWidget(self._build_table_editor_summary_panel())
+        splitter.setSizes([520, 260])
+
+        layout.addWidget(splitter)
+        return panel
+
+    def _build_ace_table_editor_right_panel(self) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+
+        splitter = QSplitter(Qt.Vertical)
+        splitter.addWidget(self._build_table_editor_detail_panel())
+        splitter.addWidget(self._build_table_editor_values_panel())
+        splitter.setSizes([220, 620])
 
         layout.addWidget(splitter)
         return panel
@@ -737,6 +847,43 @@ class MainWindow(QMainWindow):
         panel = QGroupBox("Row Values")
         layout = QVBoxLayout(panel)
         layout.addWidget(self.table_values_table)
+        return panel
+
+    def _build_table_editor_row_panel(self) -> QWidget:
+        panel = QGroupBox("Rows")
+        layout = QVBoxLayout(panel)
+        filter_row = QHBoxLayout()
+        filter_row.addWidget(QLabel("Search"))
+        filter_row.addWidget(self.table_editor_row_filter_edit, stretch=1)
+        layout.addLayout(filter_row)
+        self.table_editor_row_filter_edit.textChanged.connect(self._populate_table_editor_row_list)
+        self.table_editor_row_list.currentItemChanged.connect(self._on_table_editor_row_changed)
+        layout.addWidget(self.table_editor_row_list)
+        return panel
+
+    def _build_table_editor_summary_panel(self) -> QWidget:
+        panel = QGroupBox("ACETable Editor Summary")
+        layout = QVBoxLayout(panel)
+        layout.addWidget(self.table_editor_summary_edit)
+        return panel
+
+    def _build_table_editor_detail_panel(self) -> QWidget:
+        panel = QGroupBox("Row Edit Details")
+        layout = QVBoxLayout(panel)
+        button_row = QHBoxLayout()
+        clear_selected_button = self._make_button("Clear Selected Edit", self._clear_selected_ace_table_editor_edit)
+        clear_row_button = self._make_button("Clear Row Edits", self._clear_current_ace_table_editor_row_edits)
+        button_row.addWidget(clear_selected_button)
+        button_row.addWidget(clear_row_button)
+        button_row.addStretch(1)
+        layout.addLayout(button_row)
+        layout.addWidget(self.table_editor_detail_edit)
+        return panel
+
+    def _build_table_editor_values_panel(self) -> QWidget:
+        panel = QGroupBox("Editable Row Values")
+        layout = QVBoxLayout(panel)
+        layout.addWidget(self.table_editor_values_table)
         return panel
 
     def _make_button(self, text: str, callback) -> QPushButton:
@@ -974,6 +1121,16 @@ class MainWindow(QMainWindow):
         )
         if path:
             self._load_ace_table_file(path)
+
+    def _browse_ace_table_editor_file(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select ACETable File",
+            str(self.project_root),
+            "ACETable Files (*.lvst *.bin);;All Files (*.*)",
+        )
+        if path:
+            self._load_ace_table_editor_file(path)
 
     def _load_ace_text_from_edit(self) -> None:
         path = self.ace_text_file_edit.text().strip()
@@ -1418,6 +1575,18 @@ class MainWindow(QMainWindow):
         if path:
             self._load_ace_table_file(path)
 
+    def _load_ace_table_editor_from_edit(self) -> None:
+        path = self.ace_table_editor_file_edit.text().strip()
+        if path:
+            self._load_ace_table_editor_file(path)
+
+    def _use_current_viewer_ace_table_for_editor(self) -> None:
+        path = self.ace_table_file_edit.text().strip()
+        if not path:
+            self._show_error("Load an ACETable in the viewer first.")
+            return
+        self._load_ace_table_editor_file(path)
+
     def _export_ace_table_json(self) -> None:
         container = self.current_table_container
         if container is None:
@@ -1446,6 +1615,139 @@ class MainWindow(QMainWindow):
             self._show_error(f"{exc}\n\n{traceback.format_exc()}")
         finally:
             QApplication.restoreOverrideCursor()
+
+    def _export_ace_table_editor_json(self) -> None:
+        container = self.current_table_editor_container
+        if container is None:
+            self._show_error("Load an ACETable file in the editor before exporting JSON.")
+            return
+
+        default_name = Path(container.source_file).with_suffix(".edited.json").name
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Edited ACETable JSON",
+            str(Path(container.source_file).with_name(default_name)),
+            "JSON Files (*.json);;All Files (*.*)",
+        )
+        if not path:
+            return
+
+        try:
+            self.statusBar().showMessage("Exporting edited ACETable JSON...")
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            output_path = Path(path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(
+                json.dumps(self._build_ace_table_editor_export_object(container), ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            self.statusBar().showMessage(f"Exported edited ACETable JSON to {output_path.name}.")
+        except Exception as exc:
+            self._show_error(f"{exc}\n\n{traceback.format_exc()}")
+        finally:
+            QApplication.restoreOverrideCursor()
+
+    def _import_ace_table_editor_json(self) -> None:
+        container = self.current_table_editor_container
+        if container is None:
+            self._show_error("Load an ACETable file in the editor before importing JSON.")
+            return
+
+        default_path = str(Path(container.source_file).with_suffix(".edited.json"))
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import Edited ACETable JSON",
+            default_path,
+            "JSON Files (*.json);;All Files (*.*)",
+        )
+        if not path:
+            return
+
+        try:
+            self.statusBar().showMessage("Importing edited ACETable JSON...")
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            imported_text = Path(path).read_text(encoding="utf-8")
+            payload = json.loads(imported_text)
+            imported_edits = self._build_ace_table_editor_edits_from_json(container, payload)
+            self.table_editor_cell_edits = imported_edits
+            self._refresh_current_ace_table_editor_row_views()
+            self.statusBar().showMessage(
+                f"Imported {len(imported_edits)} ACETable cell edit(s) from {Path(path).name}."
+            )
+        except Exception as exc:
+            self._show_error(f"{exc}\n\n{traceback.format_exc()}")
+        finally:
+            QApplication.restoreOverrideCursor()
+
+    def _export_ace_table_editor_lvst(self) -> None:
+        container = self.current_table_editor_container
+        if container is None:
+            self._show_error("Load an ACETable file in the editor before exporting LVST.")
+            return
+        if not self.table_editor_cell_edits:
+            self._show_error("There are no pending ACETable edits to export.")
+            return
+
+        validation = validate_ace_table_edits(
+            container,
+            self.table_editor_cell_edits,
+            self._current_ace_table_editor_display_mode(),
+        )
+        if not validation.ok:
+            QMessageBox.warning(
+                self,
+                "ACI Text Tools",
+                self._build_ace_table_edit_validation_report(validation),
+            )
+            return
+
+        source_path = Path(container.source_file)
+        default_path = source_path.with_name(f"{source_path.stem}.edited{source_path.suffix}")
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Edited ACETable LVST",
+            str(default_path),
+            "ACETable Files (*.lvst *.bin);;All Files (*.*)",
+        )
+        if not path:
+            return
+
+        try:
+            self.statusBar().showMessage("Exporting edited ACETable LVST...")
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            output_path = export_edited_ace_table(
+                container,
+                self.table_editor_cell_edits,
+                self._current_ace_table_editor_display_mode(),
+                path,
+            )
+            self.statusBar().showMessage(
+                f"Exported edited ACETable LVST to {output_path.name}."
+            )
+        except Exception as exc:
+            self._show_error(f"{exc}\n\n{traceback.format_exc()}")
+        finally:
+            QApplication.restoreOverrideCursor()
+
+    def _validate_ace_table_editor_edits(self) -> None:
+        container = self.current_table_editor_container
+        if container is None:
+            self._show_error("Load an ACETable file in the editor before validating edits.")
+            return
+        if not self.table_editor_cell_edits:
+            self._show_error("There are no pending ACETable edits to validate.")
+            return
+
+        validation = validate_ace_table_edits(
+            container,
+            self.table_editor_cell_edits,
+            self._current_ace_table_editor_display_mode(),
+        )
+        QMessageBox.information(
+            self,
+            "ACI Text Tools",
+            self._build_ace_table_edit_validation_report(validation),
+        )
 
     def _batch_export_ace_text_files(self, mode: str) -> None:
         input_dir = QFileDialog.getExistingDirectory(
@@ -1574,6 +1876,27 @@ class MainWindow(QMainWindow):
         finally:
             QApplication.restoreOverrideCursor()
 
+    def _load_ace_table_editor_file(self, path: str) -> None:
+        try:
+            self.ace_table_editor_file_edit.setText(path)
+            self.statusBar().showMessage("Parsing ACETable for editing...")
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            self.current_table_editor_container = parse_ace_table(path)
+            self.table_editor_cell_edits = {}
+            self.table_editor_summary_edit.setPlainText(
+                self._build_table_editor_summary_text(self.current_table_editor_container)
+            )
+            self._populate_table_editor_row_list()
+            self.statusBar().showMessage(
+                f"Loaded editor ACETable with {self.current_table_editor_container.row_count} rows and "
+                f"{len(self.current_table_editor_container.columns)} columns from {Path(path).name}."
+            )
+        except Exception as exc:
+            self._clear_ace_table_editor_view()
+            self._show_error(f"{exc}\n\n{traceback.format_exc()}")
+        finally:
+            QApplication.restoreOverrideCursor()
+
     def _clear_ace_text_view(self) -> None:
         self.current_text_container = None
         self.filtered_text_entries = []
@@ -1592,6 +1915,39 @@ class MainWindow(QMainWindow):
         self.table_summary_edit.clear()
         self.table_detail_edit.clear()
         self.table_values_table.setRowCount(0)
+
+    def _clear_ace_table_editor_view(self) -> None:
+        self.current_table_editor_container = None
+        self.filtered_table_editor_rows = []
+        self.table_editor_cell_edits = {}
+        self.table_editor_row_list.clear()
+        self.table_editor_summary_edit.clear()
+        self.table_editor_detail_edit.clear()
+        self.table_editor_values_table.setRowCount(0)
+
+    def _current_ace_table_display_mode(self) -> str:
+        value = self.ace_table_display_mode_combo.currentData()
+        if isinstance(value, str) and value:
+            return value
+        return ACETableDisplayMode.AUTO
+
+    def _refresh_ace_table_display_mode(self) -> None:
+        container = self.current_table_container
+        if container is None:
+            return
+        self._populate_table_row_list()
+
+    def _current_ace_table_editor_display_mode(self) -> str:
+        value = self.ace_table_editor_display_mode_combo.currentData()
+        if isinstance(value, str) and value:
+            return value
+        return ACETableDisplayMode.AUTO
+
+    def _refresh_ace_table_editor_display_mode(self) -> None:
+        container = self.current_table_editor_container
+        if container is None:
+            return
+        self._refresh_current_ace_table_editor_row_views()
 
     def _populate_text_entry_list(self) -> None:
         self.text_entry_list.clear()
@@ -1668,6 +2024,37 @@ class MainWindow(QMainWindow):
                 f"Parsed {container.row_count} rows, filter matched 0."
             )
 
+    def _populate_table_editor_row_list(self) -> None:
+        self.table_editor_row_list.clear()
+        self.table_editor_detail_edit.clear()
+        self.table_editor_values_table.setRowCount(0)
+
+        container = self.current_table_editor_container
+        if container is None:
+            self.table_editor_summary_edit.setPlainText("No ACETable file loaded.")
+            return
+
+        needle = self.table_editor_row_filter_edit.text().strip().lower()
+        self.filtered_table_editor_rows = []
+        for row in container.rows:
+            if needle and not self._table_editor_row_matches_filter(container, row, needle):
+                continue
+            self.filtered_table_editor_rows.append(row)
+
+        for row in self.filtered_table_editor_rows:
+            item = QListWidgetItem(self._format_table_editor_row_item_text(container, row))
+            item.setData(Qt.UserRole, row)
+            self.table_editor_row_list.addItem(item)
+
+        self.table_editor_summary_edit.setPlainText(self._build_table_editor_summary_text(container))
+        if self.filtered_table_editor_rows:
+            self.table_editor_row_list.setCurrentRow(0)
+        else:
+            self.table_editor_detail_edit.setPlainText("No rows match the current filter.")
+            self.statusBar().showMessage(
+                f"Editor ACETable has {container.row_count} rows, filter matched 0."
+            )
+
     def _text_entry_matches_filter(self, entry: ACETextEntry, needle: str) -> bool:
         if needle in entry.hash_label.lower():
             return True
@@ -1685,8 +2072,8 @@ class MainWindow(QMainWindow):
                 value = row.values.get(column.hash_id)
                 if value is not None:
                     return True
-            value = row.values.get(column.hash_id)
-            if value is not None and needle in str(value).lower():
+            display_value = format_ace_table_cell_display(column, row, self._current_ace_table_display_mode())
+            if display_value and needle in display_value.lower():
                 return True
         return False
 
@@ -1708,8 +2095,9 @@ class MainWindow(QMainWindow):
 
     def _format_table_row_item_text(self, container: ACETableContainer, row: ACETableRow) -> str:
         previews: list[str] = []
+        display_mode = self._current_ace_table_display_mode()
         for column in container.columns[:8]:
-            value = row.values.get(column.hash_id)
+            value = format_ace_table_cell_display(column, row, display_mode)
             if value in (None, ""):
                 continue
             text = str(value).replace("\r", " ").replace("\n", " ")
@@ -1718,6 +2106,34 @@ class MainWindow(QMainWindow):
                 break
         suffix = "  |  ".join(previews) if previews else "(empty)"
         return f"row {row.index}  |  {suffix}"
+
+    def _table_editor_row_matches_filter(self, container: ACETableContainer, row: ACETableRow, needle: str) -> bool:
+        if needle in str(row.index):
+            return True
+        display_mode = self._current_ace_table_editor_display_mode()
+        for column in container.columns:
+            if needle in column.hash_name.lower():
+                return True
+            value = self._get_ace_table_editor_cell_display(container, row, column, display_mode)
+            if value and needle in value.lower():
+                return True
+        return False
+
+    def _format_table_editor_row_item_text(self, container: ACETableContainer, row: ACETableRow) -> str:
+        previews: list[str] = []
+        display_mode = self._current_ace_table_editor_display_mode()
+        for column in container.columns[:8]:
+            value = self._get_ace_table_editor_cell_display(container, row, column, display_mode)
+            if value in (None, ""):
+                continue
+            text = value.replace("\r", " ").replace("\n", " ")
+            previews.append(f"{column.hash_name}={self._truncate(text, 20)}")
+            if len(previews) >= 3:
+                break
+        suffix = "  |  ".join(previews) if previews else "(empty)"
+        edit_count = self._count_ace_table_editor_row_edits(row.index)
+        edit_suffix = f"  |  edits={edit_count}" if edit_count else ""
+        return f"row {row.index}{edit_suffix}  |  {suffix}"
 
     def _on_text_entry_changed(self, current: QListWidgetItem | None, previous: QListWidgetItem | None) -> None:
         del previous
@@ -1755,6 +2171,25 @@ class MainWindow(QMainWindow):
         self._populate_table_values_table(container, row)
         self.statusBar().showMessage(f"Selected ACETable row {row.index}.")
 
+    def _on_table_editor_row_changed(self, current: QListWidgetItem | None, previous: QListWidgetItem | None) -> None:
+        del previous
+        if current is None:
+            self.table_editor_detail_edit.clear()
+            self.table_editor_values_table.setRowCount(0)
+            return
+
+        row = current.data(Qt.UserRole)
+        if not isinstance(row, ACETableRow):
+            return
+
+        container = self.current_table_editor_container
+        if container is None:
+            return
+
+        self.table_editor_detail_edit.setPlainText(self._build_table_editor_row_detail_text(container, row))
+        self._populate_table_editor_values_table(container, row)
+        self.statusBar().showMessage(f"Selected ACETable editor row {row.index}.")
+
     def _populate_text_values_table(self, entry: ACETextEntry) -> None:
         rows = list(entry.values.items())
         self.text_values_table.setRowCount(len(rows))
@@ -1765,12 +2200,56 @@ class MainWindow(QMainWindow):
 
     def _populate_table_values_table(self, container: ACETableContainer, row: ACETableRow) -> None:
         self.table_values_table.setRowCount(len(container.columns))
+        display_mode = self._current_ace_table_display_mode()
         for row_index, column in enumerate(container.columns):
-            value = row.values.get(column.hash_id)
+            value = format_ace_table_cell_display(column, row, display_mode)
             self.table_values_table.setItem(row_index, 0, QTableWidgetItem(column.hash_name))
             self.table_values_table.setItem(row_index, 1, QTableWidgetItem(column.type_name))
-            self.table_values_table.setItem(row_index, 2, QTableWidgetItem("" if value is None else str(value)))
+            self.table_values_table.setItem(row_index, 2, QTableWidgetItem(value))
         self.table_values_table.resizeRowsToContents()
+
+    def _populate_table_editor_values_table(self, container: ACETableContainer, row: ACETableRow) -> None:
+        self._table_editor_updating = True
+        try:
+            self.table_editor_values_table.setRowCount(len(container.columns))
+            display_mode = self._current_ace_table_editor_display_mode()
+            for row_index, column in enumerate(container.columns):
+                current_value = format_ace_table_cell_display(column, row, display_mode)
+                edited_value = self.table_editor_cell_edits.get((row.index, column.hash_id), "")
+
+                column_item = QTableWidgetItem(column.hash_name)
+                column_item.setFlags(column_item.flags() & ~Qt.ItemIsEditable)
+                type_item = QTableWidgetItem(column.type_name)
+                type_item.setFlags(type_item.flags() & ~Qt.ItemIsEditable)
+                current_item = QTableWidgetItem(current_value)
+                current_item.setFlags(current_item.flags() & ~Qt.ItemIsEditable)
+                edited_item = QTableWidgetItem(edited_value)
+                edited_item.setData(Qt.UserRole, (row.index, column.hash_id))
+
+                self.table_editor_values_table.setItem(row_index, 0, column_item)
+                self.table_editor_values_table.setItem(row_index, 1, type_item)
+                self.table_editor_values_table.setItem(row_index, 2, current_item)
+                self.table_editor_values_table.setItem(row_index, 3, edited_item)
+        finally:
+            self._table_editor_updating = False
+        self.table_editor_values_table.resizeRowsToContents()
+
+    def _on_table_editor_value_item_changed(self, item: QTableWidgetItem) -> None:
+        if self._table_editor_updating:
+            return
+        if item.column() != 3:
+            return
+        payload = item.data(Qt.UserRole)
+        if not isinstance(payload, tuple) or len(payload) != 2:
+            return
+        row_index, hash_id = payload
+        key = (row_index, hash_id)
+        value = item.text()
+        if value:
+            self.table_editor_cell_edits[key] = value
+        else:
+            self.table_editor_cell_edits.pop(key, None)
+        self._refresh_current_ace_table_editor_row_views()
 
     def _build_text_summary_text(self, container: ACETextContainer) -> str:
         header = container.header
@@ -1850,26 +2329,222 @@ class MainWindow(QMainWindow):
             lines.append(f"{type_name}: {count}")
         return "\n".join(lines)
 
+    def _build_table_editor_summary_text(self, container: ACETableContainer) -> str:
+        support = summarize_ace_table_builder_support(container)
+        lines = self._build_table_summary_text(container).splitlines()
+        lines.extend(
+            [
+                "",
+                f"Pending Cell Edits: {len(self.table_editor_cell_edits)}",
+                f"Edited Rows: {len({row_index for row_index, _ in self.table_editor_cell_edits})}",
+                f"Display Mode: {self.ace_table_editor_display_mode_combo.currentText()}",
+                "",
+                f"Builder Supported Signatures: {support.supported_signature_count}",
+                f"Builder Unsupported Signatures: {support.unsupported_signature_count}",
+                f"Builder Supported Columns: {support.supported_column_count}",
+                f"Builder Unsupported Columns: {support.unsupported_column_count}",
+            ]
+        )
+        if support.items:
+            lines.append("")
+            lines.append("Builder Signature Support:")
+            for item in support.items[:20]:
+                status = "OK" if item.ok else "NO"
+                lines.append(
+                    f"[{status}] {item.signature}  |  columns={item.column_count}  "
+                    f"|  example={item.example_hash_name}  |  {item.message}"
+                )
+            if len(support.items) > 20:
+                lines.append(f"... {len(support.items) - 20} more signature item(s)")
+        return "\n".join(lines)
+
     def _build_table_row_detail_text(self, container: ACETableContainer, row: ACETableRow) -> str:
+        display_mode = self._current_ace_table_display_mode()
         non_empty = 0
         for column in container.columns:
-            value = row.values.get(column.hash_id)
+            value = format_ace_table_cell_display(column, row, display_mode)
             if value not in (None, ""):
                 non_empty += 1
         lines = [
             f"Row Index: {row.index}",
             f"Columns: {len(container.columns)}",
             f"Non-empty Values: {non_empty}",
+            f"Display Mode: {self.ace_table_display_mode_combo.currentText()}",
             "",
             "Preview:",
         ]
         preview_lines = []
         for column in container.columns[:12]:
-            value = row.values.get(column.hash_id)
+            value = format_ace_table_cell_display(column, row, display_mode)
             if value in (None, ""):
                 continue
             preview_lines.append(f"{column.hash_name} ({column.type_name}) = {value}")
         lines.extend(preview_lines or ["(empty)"])
+        return "\n".join(lines)
+
+    def _build_table_editor_row_detail_text(self, container: ACETableContainer, row: ACETableRow) -> str:
+        display_mode = self._current_ace_table_editor_display_mode()
+        row_edit_count = self._count_ace_table_editor_row_edits(row.index)
+        non_empty = 0
+        for column in container.columns:
+            value = self._get_ace_table_editor_cell_display(container, row, column, display_mode)
+            if value not in (None, ""):
+                non_empty += 1
+        lines = [
+            f"Row Index: {row.index}",
+            f"Columns: {len(container.columns)}",
+            f"Non-empty Values: {non_empty}",
+            f"Row Edits: {row_edit_count}",
+            f"Display Mode: {self.ace_table_editor_display_mode_combo.currentText()}",
+            "",
+            "Preview:",
+        ]
+        preview_lines = []
+        for column in container.columns[:12]:
+            value = self._get_ace_table_editor_cell_display(container, row, column, display_mode)
+            if value in (None, ""):
+                continue
+            if (row.index, column.hash_id) in self.table_editor_cell_edits:
+                value = f"{value}  ->  {self.table_editor_cell_edits[(row.index, column.hash_id)]}"
+            preview_lines.append(f"{column.hash_name} ({column.type_name}) = {value}")
+        lines.extend(preview_lines or ["(empty)"])
+        return "\n".join(lines)
+
+    def _get_ace_table_editor_cell_display(
+        self,
+        container: ACETableContainer,
+        row: ACETableRow,
+        column,
+        display_mode: str,
+    ) -> str:
+        del container
+        edited = self.table_editor_cell_edits.get((row.index, column.hash_id))
+        if edited is not None and edited != "":
+            return edited
+        return format_ace_table_cell_display(column, row, display_mode)
+
+    def _count_ace_table_editor_row_edits(self, row_index: int) -> int:
+        return sum(1 for edited_row_index, _ in self.table_editor_cell_edits if edited_row_index == row_index)
+
+    def _refresh_current_ace_table_editor_row_views(self) -> None:
+        container = self.current_table_editor_container
+        if container is None:
+            return
+        self.table_editor_summary_edit.setPlainText(self._build_table_editor_summary_text(container))
+        current_item = self.table_editor_row_list.currentItem()
+        current_row = current_item.data(Qt.UserRole) if current_item is not None else None
+        self._populate_table_editor_row_list()
+        if isinstance(current_row, ACETableRow):
+            for index in range(self.table_editor_row_list.count()):
+                item = self.table_editor_row_list.item(index)
+                row = item.data(Qt.UserRole)
+                if isinstance(row, ACETableRow) and row.index == current_row.index:
+                    self.table_editor_row_list.setCurrentRow(index)
+                    break
+
+    def _clear_selected_ace_table_editor_edit(self) -> None:
+        item = self.table_editor_values_table.currentItem()
+        if item is None:
+            self._show_error("Select an edited cell first.")
+            return
+        row = item.row()
+        edited_item = self.table_editor_values_table.item(row, 3)
+        if edited_item is None:
+            return
+        payload = edited_item.data(Qt.UserRole)
+        if not isinstance(payload, tuple) or len(payload) != 2:
+            return
+        self.table_editor_cell_edits.pop((payload[0], payload[1]), None)
+        self._refresh_current_ace_table_editor_row_views()
+
+    def _clear_current_ace_table_editor_row_edits(self) -> None:
+        current_item = self.table_editor_row_list.currentItem()
+        if current_item is None:
+            self._show_error("Select a row first.")
+            return
+        row = current_item.data(Qt.UserRole)
+        if not isinstance(row, ACETableRow):
+            return
+        keys = [key for key in self.table_editor_cell_edits if key[0] == row.index]
+        for key in keys:
+            self.table_editor_cell_edits.pop(key, None)
+        self._refresh_current_ace_table_editor_row_views()
+
+    def _clear_all_ace_table_editor_edits(self) -> None:
+        self.table_editor_cell_edits = {}
+        self._refresh_current_ace_table_editor_row_views()
+
+    def _build_ace_table_editor_export_object(self, container: ACETableContainer) -> list[dict[str, object]]:
+        rows: list[dict[str, object]] = []
+        display_mode = self._current_ace_table_editor_display_mode()
+        for row in container.rows:
+            obj: dict[str, object] = {"__row_index__": row.index}
+            for column in container.columns:
+                obj[column.hash_name] = self._get_ace_table_editor_cell_display(container, row, column, display_mode)
+            rows.append(obj)
+        return rows
+
+    def _build_ace_table_editor_edits_from_json(
+        self,
+        container: ACETableContainer,
+        payload: object,
+    ) -> dict[tuple[int, int], str]:
+        if not isinstance(payload, list):
+            raise ValueError("Edited ACETable JSON must be a list of row objects.")
+
+        row_by_index = {row.index: row for row in container.rows}
+        column_by_name = {column.hash_name: column for column in container.columns}
+        display_mode = self._current_ace_table_editor_display_mode()
+        edits: dict[tuple[int, int], str] = {}
+
+        for entry_index, entry in enumerate(payload):
+            if not isinstance(entry, dict):
+                raise ValueError(f"Edited ACETable JSON row {entry_index} is not an object.")
+            row_index_value = entry.get("__row_index__")
+            if not isinstance(row_index_value, int):
+                raise ValueError(f"Edited ACETable JSON row {entry_index} is missing integer __row_index__.")
+            row = row_by_index.get(row_index_value)
+            if row is None:
+                continue
+
+            for key, value in entry.items():
+                if key == "__row_index__":
+                    continue
+                column = column_by_name.get(key)
+                if column is None:
+                    continue
+                if value is None:
+                    normalized = ""
+                elif isinstance(value, str):
+                    normalized = value
+                else:
+                    normalized = str(value)
+
+                current_value = format_ace_table_cell_display(column, row, display_mode)
+                if normalized != current_value:
+                    edits[(row.index, column.hash_id)] = normalized
+
+        return edits
+
+    def _build_ace_table_edit_validation_report(self, validation) -> str:
+        lines = [
+            f"Validation Result: {'OK' if validation.ok else 'Failed'}",
+            f"Valid Edits: {validation.valid_count}",
+            f"Invalid Edits: {validation.invalid_count}",
+            "",
+        ]
+        if not validation.items:
+            lines.append("No edits to validate.")
+            return "\n".join(lines)
+
+        preview_limit = 24
+        for item in validation.items[:preview_limit]:
+            status = "OK" if item.ok else "ERROR"
+            lines.append(
+                f"[{status}] row {item.row_index} {item.hash_name} ({item.type_name}) - {item.message}"
+            )
+        if len(validation.items) > preview_limit:
+            lines.append(f"... {len(validation.items) - preview_limit} more item(s)")
         return "\n".join(lines)
 
     def _show_error(self, message: str) -> None:
@@ -1885,6 +2560,7 @@ class MainWindow(QMainWindow):
 
 def main() -> int:
     app = QApplication(sys.argv)
+    app.setFont(QFont("Microsoft YaHei"))
     window = MainWindow()
     window.show()
     return app.exec_()

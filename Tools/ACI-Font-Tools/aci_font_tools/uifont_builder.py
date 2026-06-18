@@ -1019,21 +1019,77 @@ def _compute_block_metrics_raw(
         return list(template_block.metrics_raw)
 
     try:
-        ascent = max(0, int(face.size.ascender))
-        descent = max(0, -int(face.size.descender))
-        max_advance = max(0, int(face.size.max_advance))
-        line_height = max(0, int(face.size.height))
+        face_ascent = max(0, int(face.size.ascender))
+        face_descent = max(0, -int(face.size.descender))
+        face_max_advance = max(0, int(face.size.max_advance))
+        face_line_height = max(0, int(face.size.height))
     except Exception:
         return list(template_block.metrics_raw)
 
-    if line_height <= 0:
-        line_height = ascent + descent
-    if max_advance <= 0:
-        max_advance = max(
+    if face_line_height <= 0:
+        face_line_height = face_ascent + face_descent
+    if face_max_advance <= 0:
+        face_max_advance = max(
             [_round_26_6(glyph.advance_x) for glyph in glyphs] + [template_block.metrics_raw[2] if len(template_block.metrics_raw) >= 3 else 0]
         )
 
-    metrics = [ascent, descent, max_advance, line_height]
+    template_ascent = template_block.metrics_raw[0] if len(template_block.metrics_raw) >= 1 else 0
+    template_descent = template_block.metrics_raw[1] if len(template_block.metrics_raw) >= 2 else 0
+    template_max_advance = template_block.metrics_raw[2] if len(template_block.metrics_raw) >= 3 else 0
+    template_line_height = template_block.metrics_raw[3] if len(template_block.metrics_raw) >= 4 else 0
+
+    template_observed_ascent = max(
+        [_round_26_6(max(0.0, glyph.ascent_px)) for glyph in template_block.glyphs],
+        default=0,
+    )
+    template_observed_descent = max(
+        [
+            _round_26_6(max(0.0, glyph.ink_height_px - glyph.ascent_px))
+            for glyph in template_block.glyphs
+        ],
+        default=0,
+    )
+    template_observed_max_advance = max(
+        [_round_26_6(max(0.0, glyph.advance_x_px)) for glyph in template_block.glyphs],
+        default=0,
+    )
+
+    top_margin = max(0, template_ascent - template_observed_ascent)
+    bottom_margin = max(0, template_descent - template_observed_descent)
+    advance_margin = max(0, template_max_advance - template_observed_max_advance)
+    line_gap = max(0, template_line_height - template_ascent - template_descent)
+
+    margin_scale = 1.0
+    if template_line_height > 0 and face_line_height > 0:
+        margin_scale = face_line_height / template_line_height
+
+    observed_ascent = max(
+        [_round_26_6(max(0.0, glyph.bearing_y)) for glyph in glyphs],
+        default=0,
+    )
+    observed_descent = max(
+        [
+            _round_26_6(max(0.0, glyph.height - glyph.bearing_y))
+            for glyph in glyphs
+        ],
+        default=0,
+    )
+    observed_max_advance = max(
+        [_round_26_6(max(0.0, glyph.advance_x)) for glyph in glyphs],
+        default=0,
+    )
+
+    scaled_top_margin = int(round(top_margin * margin_scale))
+    scaled_bottom_margin = int(round(bottom_margin * margin_scale))
+    scaled_advance_margin = int(round(advance_margin * margin_scale))
+    scaled_line_gap = int(round(line_gap * margin_scale))
+
+    ascent = max(observed_ascent + scaled_top_margin, face_ascent)
+    descent = max(observed_descent + scaled_bottom_margin, face_descent)
+    max_advance = max(observed_max_advance + scaled_advance_margin, face_max_advance)
+    line_height = max(ascent + descent + scaled_line_gap, face_line_height)
+
+    metrics = [max(0, ascent), max(0, descent), max(0, max_advance), max(0, line_height)]
     return metrics
 
 
