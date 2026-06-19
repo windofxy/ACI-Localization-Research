@@ -17,25 +17,26 @@
           ]
         },
         {
-          "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/UI Font 1_Futura_MdCn_BT26.charset.txt",
-          "filters": [
-            "MenuHeader_*_*"
-          ]
-        },
-        {
           "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/UI Font 1_Futura_MdCn_BT62.charset.txt",
           "filters": [
             "MsnNameLocal_*"
           ]
         },
         {
-          "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/UI Font 2_Futura_MdCn_BT26.charset.txt",
+          "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/UI Font 1-2_Futura_MdCn_BT26.charset.txt",
           "filters": [
             "MsnDateDesc_micp*",
             "MsnDateDesc_miff*",
             "MsnLocationDesc_micp*",
             "TabHeader_Rslt_*",
-            "InfoItem_RsltScoreDetail_*"
+            "InfoItem_RsltScoreDetail_*",
+            "MenuHeader_*_*"
+          ]
+        },
+        {
+          "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/MsnName_Futura_MdCn_BT26.charset.txt",
+          "filters": [
+            "MsnName_*"
           ]
         }
       ]
@@ -46,7 +47,7 @@
       "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-FileSystem-Research/Tools/ACI-File-Tools/output/DATA94_Modified/0x375ba2dc/0/160.act",
       "unique_charset_items": [
         {
-          "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/UI Font 1_Futura_MdCn_BT26.charset.txt",
+          "output_path": "E:/Games/Emulator/ACI-Reverse-Engineering/ACI-Localization-Research/Translations/zh-CN/UI Font 1-2_Futura_MdCn_BT26.charset.txt",
           "filters": [
             "MenuHeader_*_*",
             "MenuItem_Title_*"

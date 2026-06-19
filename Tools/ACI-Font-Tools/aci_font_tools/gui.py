@@ -66,12 +66,58 @@ def pil_image_to_qpixmap(image: Image.Image) -> QPixmap:
     return QPixmap.fromImage(qimage.copy())
 
 
+def _dropped_file_path(event, suffixes: tuple[str, ...]) -> str | None:
+    mime_data = event.mimeData()
+    if not mime_data.hasUrls():
+        return None
+    for url in mime_data.urls():
+        if not url.isLocalFile():
+            continue
+        path = url.toLocalFile()
+        if Path(path).suffix.lower() in suffixes:
+            return path
+    return None
+
+
+class FileDropLineEdit(QLineEdit):
+    def __init__(self, on_file_dropped, suffixes: tuple[str, ...], placeholder: str = "") -> None:
+        super().__init__()
+        self._on_file_dropped = on_file_dropped
+        self._drop_suffixes = tuple(suffix.lower() for suffix in suffixes)
+        self.setAcceptDrops(True)
+        if placeholder:
+            self.setPlaceholderText(placeholder)
+
+    def dragEnterEvent(self, event) -> None:  # type: ignore[override]
+        if _dropped_file_path(event, self._drop_suffixes):
+            event.acceptProposedAction()
+            return
+        super().dragEnterEvent(event)
+
+    def dropEvent(self, event) -> None:  # type: ignore[override]
+        path = _dropped_file_path(event, self._drop_suffixes)
+        if path:
+            self.setText(path)
+            self._on_file_dropped(path)
+            event.acceptProposedAction()
+            return
+        super().dropEvent(event)
+
+
 class AtlasPreviewLabel(QLabel):
-    def __init__(self, text: str) -> None:
+    def __init__(
+        self,
+        text: str,
+        on_file_dropped=None,
+        drop_suffixes: tuple[str, ...] = (),
+    ) -> None:
         super().__init__(text)
         self._empty_text = text
         self._source_pixmap: QPixmap | None = None
         self._highlight_rect: tuple[int, int, int, int] | None = None
+        self._on_file_dropped = on_file_dropped
+        self._drop_suffixes = tuple(suffix.lower() for suffix in drop_suffixes)
+        self.setAcceptDrops(on_file_dropped is not None and bool(drop_suffixes))
         self.setAlignment(Qt.AlignCenter)
         self.setMinimumSize(640, 640)
         self.setStyleSheet("background: #1f2228; color: #d7dde8;")
@@ -92,6 +138,23 @@ class AtlasPreviewLabel(QLabel):
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)
         self._update_scaled_pixmap()
+
+    def dragEnterEvent(self, event) -> None:  # type: ignore[override]
+        if self._on_file_dropped is not None and _dropped_file_path(event, self._drop_suffixes):
+            event.acceptProposedAction()
+            return
+        super().dragEnterEvent(event)
+
+    def dropEvent(self, event) -> None:  # type: ignore[override]
+        if self._on_file_dropped is None:
+            super().dropEvent(event)
+            return
+        path = _dropped_file_path(event, self._drop_suffixes)
+        if path:
+            self._on_file_dropped(path)
+            event.acceptProposedAction()
+            return
+        super().dropEvent(event)
 
     def _update_scaled_pixmap(self) -> None:
         if self._source_pixmap is None:
@@ -197,7 +260,11 @@ class MainWindow(QMainWindow):
         self.generate_progress_label = QLabel("Ready")
 
         self.preview_label = AtlasPreviewLabel("No atlas generated yet.")
-        self.uifont_file_edit = QLineEdit()
+        self.uifont_file_edit = FileDropLineEdit(
+            self._open_uifont_file_path,
+            (".uifont",),
+            "Select or drop a .uifont file",
+        )
         self.uifont_font_list = QListWidget()
         self.uifont_glyph_list = QListWidget()
         self.uifont_summary_edit = QTextEdit()
@@ -208,7 +275,11 @@ class MainWindow(QMainWindow):
         self.uifont_full_view_button.setCheckable(True)
         self.uifont_crop_view_button = QPushButton("切字视图")
         self.uifont_crop_view_button.setCheckable(True)
-        self.uifont_atlas_preview = AtlasPreviewLabel("No atlas selected yet.")
+        self.uifont_atlas_preview = AtlasPreviewLabel(
+            "No atlas selected yet. Drop a .uifont file here.",
+            on_file_dropped=self._open_uifont_file_path,
+            drop_suffixes=(".uifont",),
+        )
 
         self._ensure_config_dir()
         self._build_ui()
@@ -816,6 +887,9 @@ class MainWindow(QMainWindow):
         if not path:
             return
 
+        self._open_uifont_file_path(path)
+
+    def _open_uifont_file_path(self, path: str) -> None:
         self.uifont_file_edit.setText(path)
         self._load_uifont_file(path)
 
