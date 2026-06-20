@@ -43,11 +43,22 @@ from .ace_table_parser import (
     patch_ace_table_u32_cell_in_data,
 )
 from .event_parser import (
+    CHALLENGE_END_DATE,
+    CHALLENGE_END_TIME,
+    CHALLENGE_START_DATE,
+    CHALLENGE_START_TIME,
+    DROP_END_DATE,
+    DROP_END_TIME,
+    DROP_START_DATE,
+    DROP_START_TIME,
     SCHEDULE_END_DATE,
     SCHEDULE_END_TIME,
     SCHEDULE_START_DATE,
     SCHEDULE_START_TIME,
+    GameEventChallenge,
+    GameEventCatalogItem,
     GameEventDataset,
+    GameEventDrop,
     GameEventRecord,
     parse_game_event_directory,
 )
@@ -110,6 +121,12 @@ def _normalize_path_text(path: str | Path) -> str:
     return str(path).strip().replace("\\", "/")
 
 
+def _join_datetime(date_text: str, time_text: str) -> str:
+    if date_text and time_text:
+        return f"{date_text} {time_text}"
+    return date_text or time_text
+
+
 def _source_package_name(source_lvst: str) -> str:
     prefix = source_lvst.split("/", 1)[0]
     if prefix.startswith("NPWR04428_00-"):
@@ -148,6 +165,52 @@ class EventDisplayItem:
     @property
     def challenge_count(self) -> int:
         return sum(len(event.challenges) for event in self.events)
+
+
+@dataclass(frozen=True)
+class ChallengeDisplayItem:
+    challenge: GameEventChallenge
+    challenges: list[GameEventChallenge]
+    source_text: str
+    effective_package_text: str
+    target_text: str
+    title_text: str
+    message_text: str
+
+    @property
+    def start_text(self) -> str:
+        return _join_datetime(self.challenge.start_date, self.challenge.start_time)
+
+    @property
+    def end_text(self) -> str:
+        return _join_datetime(self.challenge.end_date, self.challenge.end_time)
+
+
+@dataclass(frozen=True)
+class DropDisplayItem:
+    drop: GameEventDrop
+    drops: list[GameEventDrop]
+    source_text: str
+    effective_package_text: str
+    title_text: str
+
+    @property
+    def start_text(self) -> str:
+        return _join_datetime(self.drop.start_date, self.drop.start_time)
+
+    @property
+    def end_text(self) -> str:
+        return _join_datetime(self.drop.end_date, self.drop.end_time)
+
+
+@dataclass(frozen=True)
+class CatalogDisplayItem:
+    item: GameEventCatalogItem
+    items: list[GameEventCatalogItem]
+    source_text: str
+    effective_package_text: str
+    name_text: str
+    desc_text: str
 
 
 @dataclass(frozen=True)
@@ -201,6 +264,264 @@ class EventDateEditDialog(QDialog):
         )
 
 
+class ChallengeDateEditDialog(QDialog):
+    def __init__(
+        self,
+        challenge: GameEventChallenge,
+        values: EventDateOverride | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(f"Edit Challenge Row {challenge.row_index} Dates")
+        self.setModal(True)
+
+        initial = values or EventDateOverride(
+            start_date=challenge.start_date,
+            start_time=challenge.start_time,
+            end_date=challenge.end_date,
+            end_time=challenge.end_time,
+        )
+
+        layout = QVBoxLayout(self)
+        form_layout = QGridLayout()
+
+        self.start_date_edit = QLineEdit(initial.start_date)
+        self.start_time_edit = QLineEdit(initial.start_time)
+        self.end_date_edit = QLineEdit(initial.end_date)
+        self.end_time_edit = QLineEdit(initial.end_time)
+
+        self.start_date_edit.setPlaceholderText("YYYY-MM-DD")
+        self.start_time_edit.setPlaceholderText("HH:MM:SS")
+        self.end_date_edit.setPlaceholderText("YYYY-MM-DD")
+        self.end_time_edit.setPlaceholderText("HH:MM:SS")
+
+        form_layout.addWidget(QLabel("Start Date"), 0, 0)
+        form_layout.addWidget(self.start_date_edit, 0, 1)
+        form_layout.addWidget(QLabel("Start Time"), 1, 0)
+        form_layout.addWidget(self.start_time_edit, 1, 1)
+        form_layout.addWidget(QLabel("End Date"), 2, 0)
+        form_layout.addWidget(self.end_date_edit, 2, 1)
+        form_layout.addWidget(QLabel("End Time"), 3, 0)
+        form_layout.addWidget(self.end_time_edit, 3, 1)
+        layout.addLayout(form_layout)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def values(self) -> EventDateOverride:
+        return EventDateOverride(
+            start_date=self.start_date_edit.text().strip(),
+            start_time=self.start_time_edit.text().strip(),
+            end_date=self.end_date_edit.text().strip(),
+            end_time=self.end_time_edit.text().strip(),
+        )
+
+
+class DropDateEditDialog(QDialog):
+    def __init__(
+        self,
+        drop: GameEventDrop,
+        values: EventDateOverride | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(f"Edit Drop Row {drop.row_index} Dates")
+        self.setModal(True)
+
+        initial = values or EventDateOverride(
+            start_date=drop.start_date,
+            start_time=drop.start_time,
+            end_date=drop.end_date,
+            end_time=drop.end_time,
+        )
+
+        layout = QVBoxLayout(self)
+        form_layout = QGridLayout()
+
+        self.start_date_edit = QLineEdit(initial.start_date)
+        self.start_time_edit = QLineEdit(initial.start_time)
+        self.end_date_edit = QLineEdit(initial.end_date)
+        self.end_time_edit = QLineEdit(initial.end_time)
+
+        self.start_date_edit.setPlaceholderText("YYYY-MM-DD")
+        self.start_time_edit.setPlaceholderText("HH:MM:SS")
+        self.end_date_edit.setPlaceholderText("YYYY-MM-DD")
+        self.end_time_edit.setPlaceholderText("HH:MM:SS")
+
+        form_layout.addWidget(QLabel("Start Date"), 0, 0)
+        form_layout.addWidget(self.start_date_edit, 0, 1)
+        form_layout.addWidget(QLabel("Start Time"), 1, 0)
+        form_layout.addWidget(self.start_time_edit, 1, 1)
+        form_layout.addWidget(QLabel("End Date"), 2, 0)
+        form_layout.addWidget(self.end_date_edit, 2, 1)
+        form_layout.addWidget(QLabel("End Time"), 3, 0)
+        form_layout.addWidget(self.end_time_edit, 3, 1)
+        layout.addLayout(form_layout)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def values(self) -> EventDateOverride:
+        return EventDateOverride(
+            start_date=self.start_date_edit.text().strip(),
+            start_time=self.start_time_edit.text().strip(),
+            end_date=self.end_date_edit.text().strip(),
+            end_time=self.end_time_edit.text().strip(),
+        )
+
+
+class ChallengeListDialog(QDialog):
+    def __init__(
+        self,
+        display_item: EventDisplayItem,
+        challenges: list[GameEventChallenge],
+        parent: "MainWindow",
+    ) -> None:
+        super().__init__(parent)
+        self.display_item = display_item
+        self.challenges = challenges
+        self.main_window = parent
+
+        self.setWindowTitle(f"Linked Challenges - Event {display_item.event.event_id}")
+        self.resize(1120, 620)
+        self.setModal(False)
+
+        layout = QVBoxLayout(self)
+        title = QLabel(
+            f"Event {display_item.event.event_id}: {display_item.display_name or '(unresolved)'} "
+            f"({len(challenges)} challenge row(s))"
+        )
+        layout.addWidget(title)
+
+        self.table = QTableWidget(0, 10)
+        self.table.setHorizontalHeaderLabels(
+            ["Source", "Row", "Target ID", "Start", "End", "Title (US)", "Title (JP)", "Message (US)", "Title Hash", "Message Hash"]
+        )
+        self.table.verticalHeader().setVisible(False)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.setWordWrap(False)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(8, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(9, QHeaderView.ResizeToContents)
+        self.table.itemDoubleClicked.connect(self._edit_selected_challenge)
+        layout.addWidget(self.table, stretch=1)
+
+        button_layout = QHBoxLayout()
+        edit_button = QPushButton("Edit Selected Date/Time")
+        reset_button = QPushButton("Reset Selected Date/Time")
+        close_button = QPushButton("Close")
+        edit_button.clicked.connect(self._edit_selected_challenge)
+        reset_button.clicked.connect(self._reset_selected_challenge)
+        close_button.clicked.connect(self.accept)
+        button_layout.addWidget(edit_button)
+        button_layout.addWidget(reset_button)
+        button_layout.addStretch(1)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+
+        self._refresh_rows()
+
+    def _refresh_rows(self) -> None:
+        self.table.setUpdatesEnabled(False)
+        try:
+            self.table.setRowCount(len(self.challenges))
+            for row_index, challenge in enumerate(self.challenges):
+                values = [
+                    challenge.source_lvst,
+                    str(challenge.row_index),
+                    str(challenge.target_id) if challenge.target_id is not None else "",
+                    self.main_window._challenge_start_text(challenge),
+                    self.main_window._challenge_end_text(challenge),
+                    challenge.title_us or "(unresolved)",
+                    challenge.title_jp or "(unresolved)",
+                    challenge.message_us or "(unresolved)",
+                    challenge.title_hash or "(none)",
+                    challenge.message_hash or "(none)",
+                ]
+                is_edited = self.main_window._has_challenge_override(challenge)
+                for column_index, value in enumerate(values):
+                    item = self.table.item(row_index, column_index)
+                    if item is None:
+                        item = QTableWidgetItem()
+                        self.table.setItem(row_index, column_index, item)
+                    item.setText(value)
+                    item.setData(Qt.UserRole, row_index)
+                    item.setToolTip("Edited" if is_edited and column_index in {3, 4} else "")
+        finally:
+            self.table.setUpdatesEnabled(True)
+
+    def _selected_challenge(self) -> GameEventChallenge | None:
+        selected_rows = self.table.selectionModel().selectedRows() if self.table.selectionModel() is not None else []
+        if not selected_rows:
+            return None
+        row_index = selected_rows[0].row()
+        if row_index < 0 or row_index >= len(self.challenges):
+            return None
+        return self.challenges[row_index]
+
+    def _edit_selected_challenge(self, *_args) -> None:
+        challenge = self._selected_challenge()
+        if challenge is None:
+            return
+        self._edit_challenge(challenge)
+
+    def _edit_challenge(self, challenge: GameEventChallenge) -> None:
+        dialog = ChallengeDateEditDialog(challenge, self.main_window._challenge_override(challenge), self)
+        if dialog.exec_() != QDialog.Accepted:
+            return
+        override = dialog.values()
+        try:
+            self.main_window._validate_challenge_override(override)
+        except Exception as exc:
+            QMessageBox.warning(self, "Edit Challenge Dates", f"Invalid date/time value:\n{exc}")
+            return
+
+        key = self.main_window._challenge_override_key(challenge)
+        if (
+            override.start_date == challenge.start_date
+            and override.start_time == challenge.start_time
+            and override.end_date == challenge.end_date
+            and override.end_time == challenge.end_time
+        ):
+            self.main_window.challenge_date_overrides.pop(key, None)
+        else:
+            self.main_window.challenge_date_overrides[key] = override
+        self._refresh_rows()
+        self.main_window._refresh_summary()
+        self.main_window._apply_challenge_filter()
+        self.main_window._sync_selected_event()
+        self.main_window.statusBar().showMessage(
+            f"Edited challenge row {challenge.row_index} in {challenge.source_lvst}"
+        )
+
+    def _reset_selected_challenge(self) -> None:
+        challenge = self._selected_challenge()
+        if challenge is None:
+            return
+        if self.main_window.challenge_date_overrides.pop(self.main_window._challenge_override_key(challenge), None) is None:
+            return
+        self._refresh_rows()
+        self.main_window._refresh_summary()
+        self.main_window._apply_challenge_filter()
+        self.main_window._sync_selected_event()
+        self.main_window.statusBar().showMessage(
+            f"Reset challenge row {challenge.row_index} in {challenge.source_lvst}"
+        )
+
+
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -211,14 +532,26 @@ class MainWindow(QMainWindow):
         self.project_root = Path(__file__).resolve().parents[1]
         self.current_dataset: GameEventDataset | None = None
         self.filtered_display_items: list[EventDisplayItem] = []
+        self.filtered_challenge_items: list[ChallengeDisplayItem] = []
+        self.filtered_drop_items: list[DropDisplayItem] = []
+        self.filtered_catalog_items: list[CatalogDisplayItem] = []
         self.sort_column = 2
         self.sort_descending = False
+        self.challenge_sort_column = 1
+        self.challenge_sort_descending = False
+        self.drop_sort_column = 1
+        self.drop_sort_descending = False
+        self.catalog_sort_column = 1
+        self.catalog_sort_descending = False
         self.full_game_act_json_hash_to_label: dict[str, str] = {}
         self.paratranz_label_to_text: dict[str, str] = {}
         self.date_overrides: dict[tuple[str, int], EventDateOverride] = {}
+        self.challenge_date_overrides: dict[tuple[str, int], EventDateOverride] = {}
+        self.drop_date_overrides: dict[tuple[str, int], EventDateOverride] = {}
 
         self.tabs = QTabWidget()
         self.tss_dir_edit = QLineEdit()
+        self.full_game_act_source_edit = QLineEdit()
         self.full_game_act_json_edit = QLineEdit()
         self.paratranz_json_edit = QLineEdit()
         self.output_dir_edit = QLineEdit()
@@ -230,6 +563,12 @@ class MainWindow(QMainWindow):
         self.merge_mode_combo.addItem("Raw Rows", "raw")
         self.event_filter_edit = QLineEdit()
         self.event_filter_edit.setPlaceholderText("Search by ID, name, source, label, or linked challenge text")
+        self.challenge_filter_edit = QLineEdit()
+        self.challenge_filter_edit.setPlaceholderText("Search by target id, title, message, or source")
+        self.drop_filter_edit = QLineEdit()
+        self.drop_filter_edit.setPlaceholderText("Search by drop id, title, source, or date")
+        self.catalog_filter_edit = QLineEdit()
+        self.catalog_filter_edit.setPlaceholderText("Search by item id, category, name, description, group, source, or label")
         self.event_table = QTableWidget(0, 7)
         self.event_table.setHorizontalHeaderLabels(["ID", "Name", "Start", "End", "Effective Package", "Source", "Challenges"])
         self.event_table.verticalHeader().setVisible(False)
@@ -248,6 +587,64 @@ class MainWindow(QMainWindow):
         self.event_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
         self.event_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
         self.event_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.challenge_table = QTableWidget(0, 7)
+        self.challenge_table.setHorizontalHeaderLabels(["Target ID", "Start", "End", "Title", "Message", "Source", "Row"])
+        self.challenge_table.verticalHeader().setVisible(False)
+        self.challenge_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.challenge_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.challenge_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.challenge_table.setWordWrap(False)
+        self.challenge_table.setAlternatingRowColors(False)
+        self.challenge_table.horizontalHeader().setSectionsClickable(True)
+        self.challenge_table.horizontalHeader().setSortIndicatorShown(True)
+        self.challenge_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.challenge_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.challenge_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.challenge_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.challenge_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
+        self.challenge_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.challenge_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        self.challenge_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.drop_table = QTableWidget(0, 7)
+        self.drop_table.setHorizontalHeaderLabels(["Drop ID", "Start", "End", "Title", "Flags", "Source", "Row"])
+        self.drop_table.verticalHeader().setVisible(False)
+        self.drop_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.drop_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.drop_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.drop_table.setWordWrap(False)
+        self.drop_table.setAlternatingRowColors(False)
+        self.drop_table.horizontalHeader().setSectionsClickable(True)
+        self.drop_table.horizontalHeader().setSortIndicatorShown(True)
+        self.drop_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.drop_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.drop_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.drop_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.drop_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.drop_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.drop_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        self.drop_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.catalog_table = QTableWidget(0, 10)
+        self.catalog_table.setHorizontalHeaderLabels(
+            ["Category", "Name", "Description", "Group ID", "Item ID", "Content ID", "Price", "Effective Package", "Source", "Row"]
+        )
+        self.catalog_table.verticalHeader().setVisible(False)
+        self.catalog_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.catalog_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.catalog_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.catalog_table.setWordWrap(False)
+        self.catalog_table.setAlternatingRowColors(False)
+        self.catalog_table.horizontalHeader().setSectionsClickable(True)
+        self.catalog_table.horizontalHeader().setSortIndicatorShown(True)
+        self.catalog_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.catalog_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.catalog_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.catalog_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.catalog_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.catalog_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.catalog_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        self.catalog_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeToContents)
+        self.catalog_table.horizontalHeader().setSectionResizeMode(8, QHeaderView.ResizeToContents)
+        self.catalog_table.horizontalHeader().setSectionResizeMode(9, QHeaderView.ResizeToContents)
         self.summary_edit = QTextEdit()
         self.summary_edit.setReadOnly(True)
         self.detail_edit = QTextEdit()
@@ -257,13 +654,31 @@ class MainWindow(QMainWindow):
         self.setStatusBar(QStatusBar())
 
         self.tabs.addTab(self._build_game_event_view_page(), "Game Event View")
+        self.tabs.addTab(self._build_challenge_view_page(), "Challenge View")
+        self.tabs.addTab(self._build_drop_view_page(), "Event Drop View")
+        self.tabs.addTab(self._build_catalog_view_page(), "Reward Catalog View")
 
         self.event_filter_edit.textChanged.connect(self._apply_event_filter)
+        self.challenge_filter_edit.textChanged.connect(self._apply_challenge_filter)
+        self.drop_filter_edit.textChanged.connect(self._apply_drop_filter)
+        self.catalog_filter_edit.textChanged.connect(self._apply_catalog_filter)
         self.package_filter_combo.currentIndexChanged.connect(self._apply_event_filter)
+        self.package_filter_combo.currentIndexChanged.connect(self._apply_catalog_filter)
         self.merge_mode_combo.currentIndexChanged.connect(self._apply_event_filter)
         self.event_table.itemSelectionChanged.connect(self._sync_selected_event)
+        self.event_table.itemDoubleClicked.connect(self._open_event_challenges_from_item)
         self.event_table.horizontalHeader().sectionClicked.connect(self._handle_header_sort)
         self.event_table.customContextMenuRequested.connect(self._show_event_context_menu)
+        self.challenge_table.itemSelectionChanged.connect(self._sync_selected_challenge)
+        self.challenge_table.itemDoubleClicked.connect(self._edit_selected_challenge_from_item)
+        self.challenge_table.horizontalHeader().sectionClicked.connect(self._handle_challenge_header_sort)
+        self.challenge_table.customContextMenuRequested.connect(self._show_challenge_context_menu)
+        self.drop_table.itemSelectionChanged.connect(self._sync_selected_drop)
+        self.drop_table.itemDoubleClicked.connect(self._edit_selected_drop_from_item)
+        self.drop_table.horizontalHeader().sectionClicked.connect(self._handle_drop_header_sort)
+        self.drop_table.customContextMenuRequested.connect(self._show_drop_context_menu)
+        self.catalog_table.itemSelectionChanged.connect(self._sync_selected_catalog)
+        self.catalog_table.horizontalHeader().sectionClicked.connect(self._handle_catalog_header_sort)
         self.tss_dir_edit.returnPressed.connect(self._load_from_edit)
 
         self.statusBar().showMessage("Ready")
@@ -281,6 +696,7 @@ class MainWindow(QMainWindow):
         source_layout = QGridLayout(source_group)
         browse_button = self._make_button("Select Folder", self._browse_tss_dir)
         load_button = self._make_button("Load", self._load_from_edit)
+        act_source_browse_button = self._make_button("Select File/Folder", self._browse_full_game_act_source)
         act_json_browse_button = self._make_button("Select File", self._browse_full_game_act_json)
         paratranz_browse_button = self._make_button("Select File", self._browse_paratranz_json)
         output_browse_button = self._make_button("Select Folder", self._browse_output_dir)
@@ -289,22 +705,26 @@ class MainWindow(QMainWindow):
         source_layout.addWidget(self.tss_dir_edit, 0, 1)
         source_layout.addWidget(browse_button, 0, 2)
         source_layout.addWidget(load_button, 0, 3)
-        source_layout.addWidget(QLabel("Full Game ACT Json"), 1, 0)
-        source_layout.addWidget(self.full_game_act_json_edit, 1, 1)
-        source_layout.addWidget(act_json_browse_button, 1, 2)
+        source_layout.addWidget(QLabel("Full Game ACT Source"), 1, 0)
+        source_layout.addWidget(self.full_game_act_source_edit, 1, 1)
+        source_layout.addWidget(act_source_browse_button, 1, 2)
         source_layout.addWidget(QLabel(""), 1, 3)
-        source_layout.addWidget(QLabel("ParaTranz Json"), 2, 0)
-        source_layout.addWidget(self.paratranz_json_edit, 2, 1)
-        source_layout.addWidget(paratranz_browse_button, 2, 2)
+        source_layout.addWidget(QLabel("Full Game ACT Json"), 2, 0)
+        source_layout.addWidget(self.full_game_act_json_edit, 2, 1)
+        source_layout.addWidget(act_json_browse_button, 2, 2)
         source_layout.addWidget(QLabel(""), 2, 3)
-        source_layout.addWidget(QLabel("Output Dir"), 3, 0)
-        source_layout.addWidget(self.output_dir_edit, 3, 1)
-        source_layout.addWidget(output_browse_button, 3, 2)
-        source_layout.addWidget(export_button, 3, 3)
-        source_layout.addWidget(QLabel("Package"), 4, 0)
-        source_layout.addWidget(self.package_filter_combo, 4, 1)
-        source_layout.addWidget(QLabel("Merge Mode"), 4, 2)
-        source_layout.addWidget(self.merge_mode_combo, 4, 3)
+        source_layout.addWidget(QLabel("ParaTranz Json"), 3, 0)
+        source_layout.addWidget(self.paratranz_json_edit, 3, 1)
+        source_layout.addWidget(paratranz_browse_button, 3, 2)
+        source_layout.addWidget(QLabel(""), 3, 3)
+        source_layout.addWidget(QLabel("Output Dir"), 4, 0)
+        source_layout.addWidget(self.output_dir_edit, 4, 1)
+        source_layout.addWidget(output_browse_button, 4, 2)
+        source_layout.addWidget(export_button, 4, 3)
+        source_layout.addWidget(QLabel("Package"), 5, 0)
+        source_layout.addWidget(self.package_filter_combo, 5, 1)
+        source_layout.addWidget(QLabel("Merge Mode"), 5, 2)
+        source_layout.addWidget(self.merge_mode_combo, 5, 3)
 
         content_splitter = QSplitter(Qt.Horizontal)
         content_splitter.addWidget(self._build_event_left_panel())
@@ -314,6 +734,42 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(source_group)
         layout.addWidget(content_splitter, stretch=1)
+        return page
+
+    def _build_challenge_view_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+
+        filter_group = QGroupBox("Challenge List")
+        filter_layout = QVBoxLayout(filter_group)
+        filter_layout.addWidget(self.challenge_filter_edit)
+        filter_layout.addWidget(self.challenge_table, stretch=1)
+
+        layout.addWidget(filter_group, stretch=1)
+        return page
+
+    def _build_drop_view_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+
+        filter_group = QGroupBox("Event Drop List")
+        filter_layout = QVBoxLayout(filter_group)
+        filter_layout.addWidget(self.drop_filter_edit)
+        filter_layout.addWidget(self.drop_table, stretch=1)
+
+        layout.addWidget(filter_group, stretch=1)
+        return page
+
+    def _build_catalog_view_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+
+        filter_group = QGroupBox("Reward Catalog List")
+        filter_layout = QVBoxLayout(filter_group)
+        filter_layout.addWidget(self.catalog_filter_edit)
+        filter_layout.addWidget(self.catalog_table, stretch=1)
+
+        layout.addWidget(filter_group, stretch=1)
         return page
 
     def _build_event_left_panel(self) -> QWidget:
@@ -350,6 +806,25 @@ class MainWindow(QMainWindow):
         if selected:
             self.tss_dir_edit.setText(_normalize_path_text(selected))
             self._load_from_edit()
+
+    def _browse_full_game_act_source(self) -> None:
+        current = self.full_game_act_source_edit.text().strip()
+        selected, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Full Game ACT File",
+            current or str(self.project_root),
+            "ACEText Files (*.act);;All Files (*.*)",
+        )
+        if not selected:
+            selected = QFileDialog.getExistingDirectory(
+                self,
+                "Select Full Game ACT Directory",
+                current or str(self.project_root),
+            )
+        if selected:
+            self.full_game_act_source_edit.setText(_normalize_path_text(selected))
+            if self.tss_dir_edit.text().strip():
+                self._load_from_edit()
 
     def _browse_full_game_act_json(self) -> None:
         current = self.full_game_act_json_edit.text().strip()
@@ -392,7 +867,11 @@ class MainWindow(QMainWindow):
         try:
             self.statusBar().showMessage("Loading game event data...")
             QApplication.setOverrideCursor(Qt.WaitCursor)
-            dataset = parse_game_event_directory(root_dir)
+            extra_act_sources = []
+            full_game_act_source_text = self.full_game_act_source_edit.text().strip()
+            if full_game_act_source_text:
+                extra_act_sources.append(Path(full_game_act_source_text))
+            dataset = parse_game_event_directory(root_dir, extra_act_sources=extra_act_sources)
         except Exception as exc:
             traceback.print_exc()
             QMessageBox.critical(self, "Load Game Events", f"Failed to load game event data:\n{exc}")
@@ -403,13 +882,20 @@ class MainWindow(QMainWindow):
 
         self.current_dataset = dataset
         self.date_overrides.clear()
+        self.challenge_date_overrides.clear()
+        self.drop_date_overrides.clear()
         self.tss_dir_edit.setText(_normalize_path_text(root_dir))
         self._reload_external_name_sources(refresh=False)
         self._refresh_package_filter()
         self._apply_event_filter()
+        self._apply_challenge_filter()
+        self._apply_drop_filter()
+        self._apply_catalog_filter()
         self._refresh_summary()
         warning_suffix = f", warnings={len(dataset.warnings)}" if dataset.warnings else ""
-        self.statusBar().showMessage(f"Loaded {len(dataset.events)} event rows{warning_suffix}")
+        self.statusBar().showMessage(
+            f"Loaded {len(dataset.events)} event rows, {len(dataset.drops)} drop rows, {len(dataset.catalog_items)} catalog rows{warning_suffix}"
+        )
 
     def _load_full_game_act_json_hash_to_label(self, path: Path) -> dict[str, str]:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -467,6 +953,9 @@ class MainWindow(QMainWindow):
 
         if refresh and self.current_dataset is not None:
             self._apply_event_filter()
+            self._apply_challenge_filter()
+            self._apply_drop_filter()
+            self._apply_catalog_filter()
 
     def _is_shared_text_hash_across_events(self, hash_text: str, event_id: int) -> bool:
         dataset = self.current_dataset
@@ -510,6 +999,66 @@ class MainWindow(QMainWindow):
         if not label:
             return ""
         return self.paratranz_label_to_text.get(label, "")
+
+    def _resolve_challenge_label(self, hash_text: str, parsed_label: str) -> str:
+        if parsed_label:
+            return parsed_label
+        return self._resolve_external_label_from_hash(hash_text)
+
+    def _resolve_challenge_translation(self, hash_text: str, parsed_label: str) -> str:
+        label = self._resolve_challenge_label(hash_text, parsed_label)
+        if not label:
+            return ""
+        return self.paratranz_label_to_text.get(label, "")
+
+    def _challenge_title_display_text(self, challenge: GameEventChallenge) -> str:
+        return (
+            self._resolve_challenge_translation(challenge.title_hash, challenge.title_label)
+            or challenge.title_us
+            or challenge.title_jp
+            or challenge.title_hash
+            or "(unresolved)"
+        )
+
+    def _challenge_message_display_text(self, challenge: GameEventChallenge) -> str:
+        return (
+            self._resolve_challenge_translation(challenge.message_hash, challenge.message_label)
+            or challenge.message_us
+            or challenge.message_jp
+            or challenge.message_hash
+            or "(unresolved)"
+        )
+
+    def _catalog_label(self, hash_text: str, parsed_label: str) -> str:
+        if parsed_label:
+            return parsed_label
+        return self._resolve_external_label_from_hash(hash_text)
+
+    def _catalog_translation(self, hash_text: str, parsed_label: str) -> str:
+        label = self._catalog_label(hash_text, parsed_label)
+        if not label:
+            return ""
+        return self.paratranz_label_to_text.get(label, "")
+
+    def _catalog_name_display_text(self, item: GameEventCatalogItem) -> str:
+        return (
+            self._catalog_translation(item.name_hash, item.name_label)
+            or item.name_us
+            or item.name_jp
+            or self._catalog_label(item.name_hash, item.name_label)
+            or item.name_hash
+            or "(unresolved)"
+        )
+
+    def _catalog_desc_display_text(self, item: GameEventCatalogItem) -> str:
+        return (
+            self._catalog_translation(item.desc_hash, item.desc_label)
+            or item.desc_us
+            or item.desc_jp
+            or self._catalog_label(item.desc_hash, item.desc_label)
+            or item.desc_hash
+            or ""
+        )
 
     def _build_ranking_proxy_name(self, event: GameEventRecord) -> str:
         ranking = event.ranking_info
@@ -571,7 +1120,12 @@ class MainWindow(QMainWindow):
         self.package_filter_combo.clear()
         self.package_filter_combo.addItem("All Packages", "")
         if dataset is not None:
-            package_names = sorted({_source_package_name(event.source_lvst) for event in dataset.events})
+            package_names = sorted(
+                {_source_package_name(event.source_lvst) for event in dataset.events}
+                | {_source_package_name(challenge.source_lvst) for challenge in dataset.challenges}
+                | {_source_package_name(drop.source_lvst) for drop in dataset.drops}
+                | {_source_package_name(item.source_lvst) for item in dataset.catalog_items}
+            )
             for package_name in package_names:
                 self.package_filter_combo.addItem(package_name, package_name)
         index = self.package_filter_combo.findData(current_value)
@@ -774,7 +1328,11 @@ class MainWindow(QMainWindow):
                         challenge.message_jp,
                         challenge.message_us,
                         challenge.title_hash,
+                        challenge.title_label,
                         challenge.message_hash,
+                        challenge.message_label,
+                        self._challenge_title_display_text(challenge),
+                        self._challenge_message_display_text(challenge),
                     ]
                 )
             combined = "\n".join(text for text in haystacks if text).lower()
@@ -784,6 +1342,520 @@ class MainWindow(QMainWindow):
         self.filtered_display_items = self._build_display_items(filtered_events)
         self._refresh_event_table(previous_items, selected_identity)
         self._refresh_summary()
+
+    def _build_challenge_display_items(self, challenges: list[GameEventChallenge]) -> list[ChallengeDisplayItem]:
+        grouped: dict[object, list[GameEventChallenge]] = {}
+        for challenge in challenges:
+            if challenge.target_id is None or challenge.target_id <= 0:
+                grouped.setdefault((challenge.source_lvst, challenge.row_index), []).append(challenge)
+                continue
+            grouped.setdefault(challenge.target_id, []).append(challenge)
+
+        display_items: list[ChallengeDisplayItem] = []
+        for target_id, grouped_challenges in grouped.items():
+            representative = max(
+                grouped_challenges,
+                key=lambda challenge: (
+                    _source_package_order(challenge.source_lvst)[0],
+                    self._challenge_start_date(challenge),
+                    self._challenge_start_time(challenge),
+                    challenge.row_index,
+                ),
+            )
+            sorted_challenges = sorted(
+                grouped_challenges,
+                key=lambda challenge: (
+                    _source_package_order(challenge.source_lvst)[0],
+                    challenge.source_lvst,
+                    challenge.row_index,
+                ),
+            )
+            source_text = representative.source_lvst
+            if len(sorted_challenges) > 1:
+                source_text = f"{representative.source_lvst} (+{len(sorted_challenges) - 1})"
+            effective_package_text = _source_package_name(representative.source_lvst)
+            if len(sorted_challenges) > 1:
+                effective_package_text = f"{effective_package_text} (+{len(sorted_challenges) - 1})"
+            display_items.append(
+                ChallengeDisplayItem(
+                    challenge=representative,
+                    challenges=sorted_challenges,
+                    source_text=source_text,
+                    effective_package_text=effective_package_text,
+                    target_text=str(target_id) if isinstance(target_id, int) and target_id > 0 else "",
+                    title_text=self._challenge_title_display_text(representative),
+                    message_text=self._challenge_message_display_text(representative),
+                )
+            )
+        return self._sort_challenge_display_items(display_items)
+
+    def _build_drop_display_items(self, drops: list[GameEventDrop]) -> list[DropDisplayItem]:
+        grouped: dict[int, list[GameEventDrop]] = {}
+        for drop in drops:
+            grouped.setdefault(drop.drop_id, []).append(drop)
+
+        display_items: list[DropDisplayItem] = []
+        for drop_id, grouped_drops in grouped.items():
+            del drop_id
+            representative = max(
+                grouped_drops,
+                key=lambda drop: (
+                    _source_package_order(drop.source_lvst)[0],
+                    drop.start_date,
+                    drop.start_time,
+                    drop.row_index,
+                ),
+            )
+            sorted_drops = sorted(
+                grouped_drops,
+                key=lambda drop: (
+                    _source_package_order(drop.source_lvst)[0],
+                    drop.source_lvst,
+                    drop.row_index,
+                ),
+            )
+            source_text = representative.source_lvst
+            if len(sorted_drops) > 1:
+                source_text = f"{representative.source_lvst} (+{len(sorted_drops) - 1})"
+            effective_package_text = _source_package_name(representative.source_lvst)
+            if len(sorted_drops) > 1:
+                effective_package_text = f"{effective_package_text} (+{len(sorted_drops) - 1})"
+            display_items.append(
+                DropDisplayItem(
+                    drop=representative,
+                    drops=sorted_drops,
+                    source_text=source_text,
+                    effective_package_text=effective_package_text,
+                    title_text=representative.title_us or representative.title_jp or representative.title_label or representative.title_hash or "(unresolved)",
+                )
+            )
+        return self._sort_drop_display_items(display_items)
+
+    def _catalog_group_key(self, item: GameEventCatalogItem) -> tuple[object, ...]:
+        if item.item_id is not None and item.item_id > 0:
+            return (item.table_kind, item.item_id)
+        return (item.table_kind, item.category, item.name_hash, item.desc_hash, item.source_lvst, item.row_index)
+
+    def _build_catalog_display_items(self, catalog_items: list[GameEventCatalogItem]) -> list[CatalogDisplayItem]:
+        grouped: dict[tuple[object, ...], list[GameEventCatalogItem]] = {}
+        for item in catalog_items:
+            grouped.setdefault(self._catalog_group_key(item), []).append(item)
+
+        display_items: list[CatalogDisplayItem] = []
+        for grouped_items in grouped.values():
+            representative = max(
+                grouped_items,
+                key=lambda item: (
+                    _source_package_order(item.source_lvst)[0],
+                    item.sort_id if item.sort_id is not None else -1,
+                    item.row_index,
+                ),
+            )
+            sorted_items = sorted(
+                grouped_items,
+                key=lambda item: (
+                    _source_package_order(item.source_lvst)[0],
+                    item.source_lvst,
+                    item.table_kind,
+                    item.row_index,
+                ),
+            )
+            source_text = representative.source_lvst
+            if len(sorted_items) > 1:
+                source_text = f"{representative.source_lvst} (+{len(sorted_items) - 1})"
+            effective_package_text = _source_package_name(representative.source_lvst)
+            if len(sorted_items) > 1:
+                effective_package_text = f"{effective_package_text} (+{len(sorted_items) - 1})"
+            display_items.append(
+                CatalogDisplayItem(
+                    item=representative,
+                    items=sorted_items,
+                    source_text=source_text,
+                    effective_package_text=effective_package_text,
+                    name_text=self._catalog_name_display_text(representative),
+                    desc_text=self._catalog_desc_display_text(representative),
+                )
+            )
+        return self._sort_catalog_display_items(display_items)
+
+    def _sort_catalog_display_items(self, display_items: list[CatalogDisplayItem]) -> list[CatalogDisplayItem]:
+        def sort_key(display_item: CatalogDisplayItem) -> tuple[object, ...]:
+            item = display_item.item
+            if self.catalog_sort_column == 0:
+                primary: tuple[object, ...] = (item.category if item.category is not None else -1,)
+            elif self.catalog_sort_column == 1:
+                primary = (display_item.name_text.lower(),)
+            elif self.catalog_sort_column == 3:
+                primary = (item.group_id if item.group_id is not None else -1,)
+            elif self.catalog_sort_column == 4:
+                primary = (item.item_id if item.item_id is not None else -1,)
+            elif self.catalog_sort_column == 5:
+                primary = (item.content_id if item.content_id is not None else -1,)
+            else:
+                primary = (item.sort_id if item.sort_id is not None else 9999999999,)
+            return (
+                *primary,
+                item.sort_id if item.sort_id is not None else 9999999999,
+                item.category if item.category is not None else -1,
+                item.item_id if item.item_id is not None else -1,
+                _source_package_order(item.source_lvst)[0],
+                item.source_lvst,
+                item.table_kind,
+                item.row_index,
+            )
+
+        return sorted(display_items, key=sort_key, reverse=self.catalog_sort_descending)
+
+    def _sort_drop_display_items(self, display_items: list[DropDisplayItem]) -> list[DropDisplayItem]:
+        def datetime_key(drop: GameEventDrop, *, end: bool = False) -> tuple[str, str]:
+            date_text = drop.end_date if end else drop.start_date
+            time_text = drop.end_time if end else drop.start_time
+            return (date_text or "9999-99-99", time_text or "99:99:99")
+
+        def sort_key(item: DropDisplayItem) -> tuple[object, ...]:
+            drop = item.drop
+            if self.drop_sort_column == 0:
+                primary: tuple[object, ...] = (drop.drop_id,)
+            elif self.drop_sort_column == 1:
+                primary = datetime_key(drop)
+            elif self.drop_sort_column == 2:
+                primary = datetime_key(drop, end=True)
+            else:
+                primary = datetime_key(drop)
+            return (
+                *primary,
+                drop.drop_id,
+                drop.start_date or "9999-99-99",
+                drop.start_time or "99:99:99",
+                _source_package_order(drop.source_lvst)[0],
+                drop.source_lvst,
+                drop.row_index,
+            )
+
+        return sorted(display_items, key=sort_key, reverse=self.drop_sort_descending)
+
+    def _sort_challenge_display_items(self, display_items: list[ChallengeDisplayItem]) -> list[ChallengeDisplayItem]:
+        def datetime_key(challenge: GameEventChallenge, *, end: bool = False) -> tuple[str, str]:
+            date_text = self._challenge_end_date(challenge) if end else self._challenge_start_date(challenge)
+            time_text = self._challenge_end_time(challenge) if end else self._challenge_start_time(challenge)
+            return (date_text or "9999-99-99", time_text or "99:99:99")
+
+        def sort_key(item: ChallengeDisplayItem) -> tuple[object, ...]:
+            challenge = item.challenge
+            if self.challenge_sort_column == 0:
+                primary: tuple[object, ...] = (challenge.target_id if challenge.target_id is not None else -1,)
+            elif self.challenge_sort_column == 1:
+                primary = datetime_key(challenge)
+            elif self.challenge_sort_column == 2:
+                primary = datetime_key(challenge, end=True)
+            else:
+                primary = datetime_key(challenge)
+            return (
+                *primary,
+                challenge.target_id if challenge.target_id is not None else -1,
+                self._challenge_start_date(challenge) or "9999-99-99",
+                self._challenge_start_time(challenge) or "99:99:99",
+                _source_package_order(challenge.source_lvst)[0],
+                challenge.source_lvst,
+                challenge.row_index,
+            )
+
+        return sorted(display_items, key=sort_key, reverse=self.challenge_sort_descending)
+
+    def _handle_challenge_header_sort(self, section: int) -> None:
+        if section not in {0, 1, 2}:
+            return
+        if self.challenge_sort_column == section:
+            self.challenge_sort_descending = not self.challenge_sort_descending
+        else:
+            self.challenge_sort_column = section
+            self.challenge_sort_descending = False
+        self._apply_challenge_filter()
+
+    def _handle_drop_header_sort(self, section: int) -> None:
+        if section not in {0, 1, 2}:
+            return
+        if self.drop_sort_column == section:
+            self.drop_sort_descending = not self.drop_sort_descending
+        else:
+            self.drop_sort_column = section
+            self.drop_sort_descending = False
+        self._apply_drop_filter()
+
+    def _handle_catalog_header_sort(self, section: int) -> None:
+        if section not in {0, 1, 3, 4, 5}:
+            return
+        if self.catalog_sort_column == section:
+            self.catalog_sort_descending = not self.catalog_sort_descending
+        else:
+            self.catalog_sort_column = section
+            self.catalog_sort_descending = False
+        self._apply_catalog_filter()
+
+    def _apply_challenge_filter(self) -> None:
+        dataset = self.current_dataset
+        if dataset is None:
+            self.filtered_challenge_items = []
+            self._refresh_challenge_table()
+            return
+
+        query = self.challenge_filter_edit.text().strip().lower()
+        filtered: list[GameEventChallenge] = []
+        for challenge in dataset.challenges:
+            haystacks = [
+                str(challenge.target_id) if challenge.target_id is not None else "",
+                challenge.source_lvst,
+                str(challenge.row_index),
+                challenge.start_date,
+                challenge.start_time,
+                challenge.end_date,
+                challenge.end_time,
+                challenge.title_hash,
+                challenge.title_label,
+                challenge.title_jp,
+                challenge.title_us,
+                challenge.message_hash,
+                challenge.message_label,
+                challenge.message_jp,
+                challenge.message_us,
+                self._challenge_title_display_text(challenge),
+                self._challenge_message_display_text(challenge),
+            ]
+            combined = "\n".join(text for text in haystacks if text).lower()
+            if not query or query in combined:
+                filtered.append(challenge)
+
+        self.filtered_challenge_items = self._build_challenge_display_items(filtered)
+        self._refresh_challenge_table()
+        self._refresh_summary()
+
+    def _apply_drop_filter(self) -> None:
+        dataset = self.current_dataset
+        if dataset is None:
+            self.filtered_drop_items = []
+            self._refresh_drop_table()
+            self._refresh_summary()
+            return
+
+        query = self.drop_filter_edit.text().strip().lower()
+        filtered: list[GameEventDrop] = []
+        for drop in dataset.drops:
+            haystacks = [
+                str(drop.drop_id),
+                drop.source_lvst,
+                str(drop.row_index),
+                drop.start_date,
+                drop.start_time,
+                drop.end_date,
+                drop.end_time,
+                drop.title_hash,
+                drop.title_label,
+                drop.title_jp,
+                drop.title_us,
+                str(drop.flag_a) if drop.flag_a is not None else "",
+                str(drop.flag_b) if drop.flag_b is not None else "",
+                str(drop.flag_c) if drop.flag_c is not None else "",
+            ]
+            combined = "\n".join(text for text in haystacks if text).lower()
+            if not query or query in combined:
+                filtered.append(drop)
+
+        self.filtered_drop_items = self._build_drop_display_items(filtered)
+        self._refresh_drop_table()
+        self._refresh_summary()
+
+    def _apply_catalog_filter(self) -> None:
+        dataset = self.current_dataset
+        if dataset is None:
+            self.filtered_catalog_items = []
+            self._refresh_catalog_table()
+            self._refresh_summary()
+            return
+
+        query = self.catalog_filter_edit.text().strip().lower()
+        selected_package = self.package_filter_combo.currentData()
+        filtered: list[GameEventCatalogItem] = []
+        for item in dataset.catalog_items:
+            if selected_package and _source_package_name(item.source_lvst) != selected_package:
+                continue
+            name_label = self._catalog_label(item.name_hash, item.name_label)
+            desc_label = self._catalog_label(item.desc_hash, item.desc_label)
+            haystacks = [
+                item.table_kind,
+                str(item.visible) if item.visible is not None else "",
+                str(item.sort_id) if item.sort_id is not None else "",
+                str(item.group_id) if item.group_id is not None else "",
+                str(item.item_id) if item.item_id is not None else "",
+                str(item.item_id_b) if item.item_id_b is not None else "",
+                str(item.category) if item.category is not None else "",
+                item.name_hash,
+                name_label,
+                item.name_jp,
+                item.name_us,
+                self._catalog_name_display_text(item),
+                item.desc_hash,
+                desc_label,
+                item.desc_jp,
+                item.desc_us,
+                self._catalog_desc_display_text(item),
+                str(item.content_id) if item.content_id is not None else "",
+                str(item.packed_id) if item.packed_id is not None else "",
+                item.source_lvst,
+                str(item.row_index),
+            ]
+            combined = "\n".join(text for text in haystacks if text).lower()
+            if not query or query in combined:
+                filtered.append(item)
+
+        self.filtered_catalog_items = self._build_catalog_display_items(filtered)
+        self._refresh_catalog_table()
+        self._refresh_summary()
+
+    def _refresh_challenge_table(self) -> None:
+        self.challenge_table.setUpdatesEnabled(False)
+        table_blocker = QSignalBlocker(self.challenge_table)
+        selection_model = self.challenge_table.selectionModel()
+        selection_blocker = QSignalBlocker(selection_model) if selection_model is not None else None
+        try:
+            self.challenge_table.setRowCount(len(self.filtered_challenge_items))
+            for row_index, display_item in enumerate(self.filtered_challenge_items):
+                self._write_challenge_table_row(row_index, display_item)
+            sort_order = Qt.DescendingOrder if self.challenge_sort_descending else Qt.AscendingOrder
+            self.challenge_table.horizontalHeader().setSortIndicator(self.challenge_sort_column, sort_order)
+        finally:
+            del table_blocker
+            if selection_blocker is not None:
+                del selection_blocker
+            self.challenge_table.setUpdatesEnabled(True)
+
+    def _refresh_drop_table(self) -> None:
+        self.drop_table.setUpdatesEnabled(False)
+        table_blocker = QSignalBlocker(self.drop_table)
+        selection_model = self.drop_table.selectionModel()
+        selection_blocker = QSignalBlocker(selection_model) if selection_model is not None else None
+        try:
+            self.drop_table.setRowCount(len(self.filtered_drop_items))
+            for row_index, display_item in enumerate(self.filtered_drop_items):
+                self._write_drop_table_row(row_index, display_item)
+            sort_order = Qt.DescendingOrder if self.drop_sort_descending else Qt.AscendingOrder
+            self.drop_table.horizontalHeader().setSortIndicator(self.drop_sort_column, sort_order)
+        finally:
+            del table_blocker
+            if selection_blocker is not None:
+                del selection_blocker
+            self.drop_table.setUpdatesEnabled(True)
+
+    def _refresh_catalog_table(self) -> None:
+        self.catalog_table.setUpdatesEnabled(False)
+        table_blocker = QSignalBlocker(self.catalog_table)
+        selection_model = self.catalog_table.selectionModel()
+        selection_blocker = QSignalBlocker(selection_model) if selection_model is not None else None
+        try:
+            self.catalog_table.setRowCount(len(self.filtered_catalog_items))
+            for row_index, display_item in enumerate(self.filtered_catalog_items):
+                self._write_catalog_table_row(row_index, display_item)
+            sort_order = Qt.DescendingOrder if self.catalog_sort_descending else Qt.AscendingOrder
+            self.catalog_table.horizontalHeader().setSortIndicator(self.catalog_sort_column, sort_order)
+        finally:
+            del table_blocker
+            if selection_blocker is not None:
+                del selection_blocker
+            self.catalog_table.setUpdatesEnabled(True)
+
+    def _category_text(self, category: int | None) -> str:
+        names = {
+            1: "1 Aircraft",
+            2: "2 Skin",
+            3: "3 Emblem",
+            4: "4 Nickname",
+            5: "5 Misc",
+            6: "6 Item",
+        }
+        if category is None:
+            return ""
+        return names.get(category, str(category))
+
+    def _catalog_price_text(self, item: GameEventCatalogItem) -> str:
+        parts = []
+        if item.price_a is not None:
+            parts.append(str(item.price_a))
+        if item.price_b is not None and item.price_b != 0:
+            parts.append(f"sub={item.price_b}")
+        if item.multiplier is not None and item.multiplier != 1.0:
+            parts.append(f"x{item.multiplier:g}")
+        return ", ".join(parts)
+
+    def _write_catalog_table_row(self, row_index: int, display_item: CatalogDisplayItem) -> None:
+        item = display_item.item
+        values = [
+            self._category_text(item.category),
+            display_item.name_text,
+            display_item.desc_text,
+            str(item.group_id) if item.group_id is not None else "",
+            str(item.item_id) if item.item_id is not None else "",
+            str(item.content_id) if item.content_id is not None else "",
+            self._catalog_price_text(item),
+            display_item.effective_package_text,
+            display_item.source_text,
+            f"{item.table_kind}:{item.row_index} (+{len(display_item.items) - 1})" if len(display_item.items) > 1 else f"{item.table_kind}:{item.row_index}",
+        ]
+        for column_index, value in enumerate(values):
+            table_item = self.catalog_table.item(row_index, column_index)
+            if table_item is None:
+                table_item = QTableWidgetItem()
+                self.catalog_table.setItem(row_index, column_index, table_item)
+            table_item.setText(value)
+            table_item.setData(Qt.UserRole, row_index)
+
+    def _write_drop_table_row(self, row_index: int, display_item: DropDisplayItem) -> None:
+        drop = display_item.drop
+        flags = ", ".join(
+            part
+            for part in [
+                f"A={drop.flag_a}" if drop.flag_a is not None else "",
+                f"B={drop.flag_b}" if drop.flag_b is not None else "",
+                f"C={drop.flag_c}" if drop.flag_c is not None else "",
+            ]
+            if part
+        )
+        values = [
+            str(drop.drop_id),
+            self._drop_start_text(drop),
+            self._drop_end_text(drop),
+            display_item.title_text,
+            flags,
+            display_item.source_text,
+            f"{drop.row_index} (+{len(display_item.drops) - 1})" if len(display_item.drops) > 1 else str(drop.row_index),
+        ]
+        for column_index, value in enumerate(values):
+            item = self.drop_table.item(row_index, column_index)
+            if item is None:
+                item = QTableWidgetItem()
+                self.drop_table.setItem(row_index, column_index, item)
+            item.setText(value)
+            item.setData(Qt.UserRole, row_index)
+            item.setToolTip("Edited" if self._has_drop_override(drop) and column_index in {1, 2} else "")
+
+    def _write_challenge_table_row(self, row_index: int, display_item: ChallengeDisplayItem) -> None:
+        challenge = display_item.challenge
+        values = [
+            display_item.target_text,
+            self._challenge_start_text(challenge),
+            self._challenge_end_text(challenge),
+            display_item.title_text,
+            display_item.message_text,
+            display_item.source_text,
+            f"{challenge.row_index} (+{len(display_item.challenges) - 1})" if len(display_item.challenges) > 1 else str(challenge.row_index),
+        ]
+        is_edited = any(self._has_challenge_override(item) for item in display_item.challenges)
+        for column_index, value in enumerate(values):
+            item = self.challenge_table.item(row_index, column_index)
+            if item is None:
+                item = QTableWidgetItem()
+                self.challenge_table.setItem(row_index, column_index, item)
+            item.setText(value)
+            item.setData(Qt.UserRole, row_index)
+            item.setToolTip("Edited" if is_edited and column_index in {1, 2} else "")
 
     def _refresh_event_table(
         self,
@@ -913,11 +1985,20 @@ class MainWindow(QMainWindow):
             f"Packages: {len(dataset.package_dirs)}",
             f"Package Filter: {selected_package or 'All Packages'}",
             f"Merge Mode: {self.merge_mode_combo.currentText()}",
+            f"Full Game ACT Source: {self.full_game_act_source_edit.text().strip() or '(none)'}",
             f"Full Game ACT Json Labels: {len(self.full_game_act_json_hash_to_label)}",
             f"ParaTranz Labels: {len(self.paratranz_label_to_text)}",
             f"Edited schedule rows: {len(self.date_overrides)}",
+            f"Edited challenge rows: {len(self.challenge_date_overrides)}",
+            f"Edited drop rows: {len(self.drop_date_overrides)}",
             f"Visible list rows: {len(self.filtered_display_items)}",
             f"Raw event rows: {len(dataset.events)}",
+            f"Raw challenge rows: {len(dataset.challenges)}",
+            f"Visible challenge rows: {len(self.filtered_challenge_items)}",
+            f"Raw drop rows: {len(dataset.drops)}",
+            f"Visible drop rows: {len(self.filtered_drop_items)}",
+            f"Raw catalog rows: {len(dataset.catalog_items)}",
+            f"Visible catalog rows: {len(self.filtered_catalog_items)}",
             f"ACT files found: {len(dataset.act_files)} (parsed {len(dataset.parsed_act_files)})",
             f"LVST files found: {len(dataset.lvst_files)} (parsed event-related {len(dataset.parsed_lvst_files)})",
             f"Plaintext fallback labels: {len(dataset.plaintext_labels)}",
@@ -949,6 +2030,65 @@ class MainWindow(QMainWindow):
             return
         display_item = self.filtered_display_items[row_index]
         self.detail_edit.setPlainText(self._build_event_detail_text(display_item))
+
+    def _sync_selected_challenge(self) -> None:
+        selected_indexes = self.challenge_table.selectionModel().selectedRows()
+        if not selected_indexes:
+            return
+        row_index = selected_indexes[0].row()
+        if row_index < 0 or row_index >= len(self.filtered_challenge_items):
+            return
+        self.detail_edit.setPlainText(self._build_challenge_detail_text(self.filtered_challenge_items[row_index]))
+
+    def _sync_selected_drop(self) -> None:
+        selected_indexes = self.drop_table.selectionModel().selectedRows()
+        if not selected_indexes:
+            self.detail_edit.clear()
+            return
+        row_index = selected_indexes[0].row()
+        if row_index < 0 or row_index >= len(self.filtered_drop_items):
+            self.detail_edit.clear()
+            return
+        self.detail_edit.setPlainText(self._build_drop_detail_text(self.filtered_drop_items[row_index]))
+
+    def _sync_selected_catalog(self) -> None:
+        selected_indexes = self.catalog_table.selectionModel().selectedRows()
+        if not selected_indexes:
+            self.detail_edit.clear()
+            return
+        row_index = selected_indexes[0].row()
+        if row_index < 0 or row_index >= len(self.filtered_catalog_items):
+            self.detail_edit.clear()
+            return
+        self.detail_edit.setPlainText(self._build_catalog_detail_text(self.filtered_catalog_items[row_index]))
+
+    def _build_challenge_detail_text(self, display_item: ChallengeDisplayItem) -> str:
+        challenge = display_item.challenge
+        lines = [
+            f"Target ID: {challenge.target_id if challenge.target_id is not None else '(none)'}",
+            f"Effective Source: {challenge.source_lvst} [row {challenge.row_index}]",
+            f"Merged Target-ID Rows: {len(display_item.challenges)}",
+            f"Start: {self._challenge_start_text(challenge) or '(none)'}",
+            f"End: {self._challenge_end_text(challenge) or '(none)'}",
+            f"Title Hash: {challenge.title_hash or '(none)'}",
+            f"Title Label: {challenge.title_label or '(none)'}",
+            f"Title Display: {self._challenge_title_display_text(challenge)}",
+            f"Title (US): {challenge.title_us or '(unresolved)'}",
+            f"Title (JP): {challenge.title_jp or '(unresolved)'}",
+            f"Message Hash: {challenge.message_hash or '(none)'}",
+            f"Message Label: {challenge.message_label or '(none)'}",
+            f"Message Display: {self._challenge_message_display_text(challenge)}",
+            f"Message (US): {challenge.message_us or '(unresolved)'}",
+            f"Message (JP): {challenge.message_jp or '(unresolved)'}",
+        ]
+        if self._has_challenge_override(challenge):
+            lines.append("Edited Dates: yes")
+        if len(display_item.challenges) > 1:
+            lines.append("")
+            lines.append("Merged sources:")
+            for merged_challenge in display_item.challenges:
+                lines.append(f"- {merged_challenge.source_lvst} [row {merged_challenge.row_index}]")
+        return "\n".join(lines)
 
     def _build_event_detail_text(self, display_item: EventDisplayItem) -> str:
         event = display_item.event
@@ -1042,14 +2182,299 @@ class MainWindow(QMainWindow):
             lines.append(f"Linked Challenges: {len(challenges)}")
             for index, challenge in enumerate(challenges, start=1):
                 lines.append(f"[{index}] {challenge.source_lvst} row {challenge.row_index}")
+                lines.append(f"Target ID: {challenge.target_id if challenge.target_id is not None else '(none)'}")
+                lines.append(f"Start: {self._challenge_start_text(challenge) or '(none)'}")
+                lines.append(f"End: {self._challenge_end_text(challenge) or '(none)'}")
+                if self._has_challenge_override(challenge):
+                    lines.append("Edited Dates: yes")
                 lines.append(f"Title Hash: {challenge.title_hash or '(none)'}")
+                lines.append(f"Title Label: {challenge.title_label or '(none)'}")
+                lines.append(f"Title Display: {self._challenge_title_display_text(challenge)}")
                 lines.append(f"Title (JP): {challenge.title_jp or '(unresolved)'}")
                 lines.append(f"Title (US): {challenge.title_us or '(unresolved)'}")
                 lines.append(f"Message Hash: {challenge.message_hash or '(none)'}")
+                lines.append(f"Message Label: {challenge.message_label or '(none)'}")
+                lines.append(f"Message Display: {self._challenge_message_display_text(challenge)}")
                 lines.append(f"Message (JP): {challenge.message_jp or '(unresolved)'}")
                 lines.append(f"Message (US): {challenge.message_us or '(unresolved)'}")
                 lines.append("")
         return "\n".join(lines).rstrip()
+
+    def _build_catalog_detail_text(self, display_item: CatalogDisplayItem) -> str:
+        item = display_item.item
+        name_label = self._catalog_label(item.name_hash, item.name_label)
+        desc_label = self._catalog_label(item.desc_hash, item.desc_label)
+        name_translation = self._catalog_translation(item.name_hash, item.name_label)
+        desc_translation = self._catalog_translation(item.desc_hash, item.desc_label)
+        lines = [
+            f"Category: {self._category_text(item.category) or '(none)'}",
+            f"Display Name: {display_item.name_text}",
+            f"Display Description: {display_item.desc_text or '(none)'}",
+            f"Effective Source: {item.source_lvst} [{item.table_kind} row {item.row_index}]",
+            f"Merged Catalog Rows: {len(display_item.items)}",
+            f"Table Kind: {item.table_kind}",
+            f"Visible: {item.visible if item.visible is not None else '(none)'}",
+            f"Sort ID: {item.sort_id if item.sort_id is not None else '(none)'}",
+            f"Group ID: {item.group_id if item.group_id is not None else '(none)'}",
+            f"Item ID: {item.item_id if item.item_id is not None else '(none)'}",
+            f"Item ID B: {item.item_id_b if item.item_id_b is not None else '(none)'}",
+            f"Content ID: {item.content_id if item.content_id is not None else '(none)'}",
+            f"Packed ID: {item.packed_id if item.packed_id is not None else '(none)'}",
+            f"Price A: {item.price_a if item.price_a is not None else '(none)'}",
+            f"Price B: {item.price_b if item.price_b is not None else '(none)'}",
+            f"Limit Flag: {item.limit_flag if item.limit_flag is not None else '(none)'}",
+            f"Multiplier: {item.multiplier if item.multiplier is not None else '(none)'}",
+            f"Flag: {item.flag if item.flag is not None else '(none)'}",
+            "",
+            f"Name Hash: {item.name_hash or '(none)'}",
+            f"Name Label: {name_label or '(none)'}",
+            f"Name ParaTranz: {name_translation or '(none)'}",
+            f"Name (US): {item.name_us or '(unresolved)'}",
+            f"Name (JP): {item.name_jp or '(unresolved)'}",
+            "",
+            f"Description Hash: {item.desc_hash or '(none)'}",
+            f"Description Label: {desc_label or '(none)'}",
+            f"Description ParaTranz: {desc_translation or '(none)'}",
+            f"Description (US): {item.desc_us or '(unresolved)'}",
+            f"Description (JP): {item.desc_jp or '(unresolved)'}",
+        ]
+        if len(display_item.items) > 1:
+            lines.append("")
+            lines.append("Merged sources:")
+            for merged_item in display_item.items:
+                lines.append(f"- {merged_item.source_lvst} [{merged_item.table_kind} row {merged_item.row_index}]")
+        return "\n".join(lines).rstrip()
+
+    def _build_drop_detail_text(self, display_item: DropDisplayItem) -> str:
+        drop = display_item.drop
+        lines = [
+            f"Drop ID: {drop.drop_id}",
+            f"Effective Source: {drop.source_lvst} [row {drop.row_index}]",
+            f"Merged Drop-ID Rows: {len(display_item.drops)}",
+            f"Start: {self._drop_start_text(drop) or '(none)'}",
+            f"End: {self._drop_end_text(drop) or '(none)'}",
+            f"Title Hash: {drop.title_hash or '(none)'}",
+            f"Title Label: {drop.title_label or '(none)'}",
+            f"Title Display: {display_item.title_text or '(unresolved)'}",
+            f"Title (US): {drop.title_us or '(unresolved)'}",
+            f"Title (JP): {drop.title_jp or '(unresolved)'}",
+            f"Flag A: {drop.flag_a if drop.flag_a is not None else '(none)'}",
+            f"Flag B: {drop.flag_b if drop.flag_b is not None else '(none)'}",
+            f"Flag C: {drop.flag_c if drop.flag_c is not None else '(none)'}",
+        ]
+        if self._has_drop_override(drop):
+            lines.append("Edited Dates: yes")
+        if len(display_item.drops) > 1:
+            lines.append("")
+            lines.append("Merged sources:")
+            for merged_drop in display_item.drops:
+                lines.append(f"- {merged_drop.source_lvst} [row {merged_drop.row_index}]")
+        return "\n".join(lines)
+
+    def _challenge_override_key(self, challenge: GameEventChallenge) -> tuple[str, int]:
+        return (_normalize_path_text(challenge.source_file), challenge.row_index)
+
+    def _has_challenge_override(self, challenge: GameEventChallenge) -> bool:
+        return self._challenge_override_key(challenge) in self.challenge_date_overrides
+
+    def _challenge_override(self, challenge: GameEventChallenge) -> EventDateOverride | None:
+        return self.challenge_date_overrides.get(self._challenge_override_key(challenge))
+
+    def _challenge_start_date(self, challenge: GameEventChallenge) -> str:
+        override = self._challenge_override(challenge)
+        return override.start_date if override is not None else challenge.start_date
+
+    def _challenge_start_time(self, challenge: GameEventChallenge) -> str:
+        override = self._challenge_override(challenge)
+        return override.start_time if override is not None else challenge.start_time
+
+    def _challenge_end_date(self, challenge: GameEventChallenge) -> str:
+        override = self._challenge_override(challenge)
+        return override.end_date if override is not None else challenge.end_date
+
+    def _challenge_end_time(self, challenge: GameEventChallenge) -> str:
+        override = self._challenge_override(challenge)
+        return override.end_time if override is not None else challenge.end_time
+
+    def _challenge_start_text(self, challenge: GameEventChallenge) -> str:
+        return _join_datetime(self._challenge_start_date(challenge), self._challenge_start_time(challenge))
+
+    def _challenge_end_text(self, challenge: GameEventChallenge) -> str:
+        return _join_datetime(self._challenge_end_date(challenge), self._challenge_end_time(challenge))
+
+    def _validate_challenge_override(self, override: EventDateOverride) -> None:
+        self._validate_date_override(override)
+
+    def _open_event_challenges_from_item(self, item: QTableWidgetItem) -> None:
+        row_index = item.data(Qt.UserRole)
+        if not isinstance(row_index, int) or row_index < 0 or row_index >= len(self.filtered_display_items):
+            return
+        self._open_event_challenges(self.filtered_display_items[row_index])
+
+    def _open_event_challenges(self, display_item: EventDisplayItem) -> None:
+        challenges = []
+        seen: set[tuple[str, int, str, str]] = set()
+        for merged_event in display_item.events:
+            for challenge in merged_event.challenges:
+                key = (challenge.source_lvst, challenge.row_index, challenge.title_hash, challenge.message_hash)
+                if key in seen:
+                    continue
+                seen.add(key)
+                challenges.append(challenge)
+        if not challenges:
+            QMessageBox.information(self, "Linked Challenges", "This event has no linked challenge rows.")
+            return
+        dialog = ChallengeListDialog(display_item, challenges, self)
+        dialog.exec_()
+
+    def _selected_challenge_item(self) -> ChallengeDisplayItem | None:
+        selected_indexes = self.challenge_table.selectionModel().selectedRows() if self.challenge_table.selectionModel() is not None else []
+        if not selected_indexes:
+            return None
+        row_index = selected_indexes[0].row()
+        if row_index < 0 or row_index >= len(self.filtered_challenge_items):
+            return None
+        return self.filtered_challenge_items[row_index]
+
+    def _edit_selected_challenge_from_item(self, *_args) -> None:
+        display_item = self._selected_challenge_item()
+        if display_item is None:
+            return
+        self._edit_challenge_item(display_item)
+
+    def _show_challenge_context_menu(self, position) -> None:
+        item = self.challenge_table.itemAt(position)
+        if item is None:
+            return
+        row_index = item.data(Qt.UserRole)
+        if not isinstance(row_index, int) or row_index < 0 or row_index >= len(self.filtered_challenge_items):
+            return
+        display_item = self.filtered_challenge_items[row_index]
+        self.challenge_table.selectRow(row_index)
+
+        menu = QMenu(self)
+        edit_action = menu.addAction("Edit Date/Time")
+        reset_action = menu.addAction("Reset Edited Date/Time")
+        reset_action.setEnabled(any(self._has_challenge_override(challenge) for challenge in display_item.challenges))
+        selected_action = menu.exec_(self.challenge_table.viewport().mapToGlobal(position))
+        if selected_action == edit_action:
+            self._edit_challenge_item(display_item)
+        elif selected_action == reset_action:
+            self._reset_challenge_item(display_item)
+
+    def _edit_selected_drop_from_item(self, *_args) -> None:
+        display_item = self._selected_drop_item()
+        if display_item is None:
+            return
+        self._edit_drop_item(display_item)
+
+    def _selected_drop_item(self) -> DropDisplayItem | None:
+        selected_indexes = self.drop_table.selectionModel().selectedRows() if self.drop_table.selectionModel() is not None else []
+        if not selected_indexes:
+            return None
+        row_index = selected_indexes[0].row()
+        if row_index < 0 or row_index >= len(self.filtered_drop_items):
+            return None
+        return self.filtered_drop_items[row_index]
+
+    def _show_drop_context_menu(self, position) -> None:
+        item = self.drop_table.itemAt(position)
+        if item is None:
+            return
+        row_index = item.data(Qt.UserRole)
+        if not isinstance(row_index, int) or row_index < 0 or row_index >= len(self.filtered_drop_items):
+            return
+        display_item = self.filtered_drop_items[row_index]
+        self.drop_table.selectRow(row_index)
+
+        menu = QMenu(self)
+        edit_action = menu.addAction("Edit Date/Time")
+        reset_action = menu.addAction("Reset Edited Date/Time")
+        reset_action.setEnabled(any(self._has_drop_override(drop) for drop in display_item.drops))
+        selected_action = menu.exec_(self.drop_table.viewport().mapToGlobal(position))
+        if selected_action == edit_action:
+            self._edit_drop_item(display_item)
+        elif selected_action == reset_action:
+            self._reset_drop_item(display_item)
+
+    def _edit_drop_item(self, display_item: DropDisplayItem) -> None:
+        drop = display_item.drop
+        dialog = DropDateEditDialog(drop, self._drop_override(drop), self)
+        if dialog.exec_() != QDialog.Accepted:
+            return
+        override = dialog.values()
+        try:
+            self._validate_drop_override(override)
+        except Exception as exc:
+            QMessageBox.warning(self, "Edit Drop Dates", f"Invalid date/time value:\n{exc}")
+            return
+
+        for target_drop in display_item.drops:
+            key = self._drop_override_key(target_drop)
+            if (
+                override.start_date == target_drop.start_date
+                and override.start_time == target_drop.start_time
+                and override.end_date == target_drop.end_date
+                and override.end_time == target_drop.end_time
+            ):
+                self.drop_date_overrides.pop(key, None)
+            else:
+                self.drop_date_overrides[key] = override
+        self._apply_drop_filter()
+        self.statusBar().showMessage(
+            f"Edited drop {display_item.drop.drop_id} dates across {len(display_item.drops)} row(s)"
+        )
+
+    def _reset_drop_item(self, display_item: DropDisplayItem) -> None:
+        removed = False
+        for drop in display_item.drops:
+            removed = self.drop_date_overrides.pop(self._drop_override_key(drop), None) is not None or removed
+        if not removed:
+            return
+        self._apply_drop_filter()
+        self.statusBar().showMessage(
+            f"Reset drop {display_item.drop.drop_id} dates across {len(display_item.drops)} row(s)"
+        )
+
+    def _edit_challenge_item(self, display_item: ChallengeDisplayItem) -> None:
+        challenge = display_item.challenge
+        dialog = ChallengeDateEditDialog(challenge, self._challenge_override(challenge), self)
+        if dialog.exec_() != QDialog.Accepted:
+            return
+        override = dialog.values()
+        try:
+            self._validate_challenge_override(override)
+        except Exception as exc:
+            QMessageBox.warning(self, "Edit Challenge Dates", f"Invalid date/time value:\n{exc}")
+            return
+
+        for target_challenge in display_item.challenges:
+            key = self._challenge_override_key(target_challenge)
+            if (
+                override.start_date == target_challenge.start_date
+                and override.start_time == target_challenge.start_time
+                and override.end_date == target_challenge.end_date
+                and override.end_time == target_challenge.end_time
+            ):
+                self.challenge_date_overrides.pop(key, None)
+            else:
+                self.challenge_date_overrides[key] = override
+        self._apply_challenge_filter()
+        self._sync_selected_event()
+        self.statusBar().showMessage(
+            f"Edited target {display_item.target_text or '(none)'} across {len(display_item.challenges)} challenge row(s)"
+        )
+
+    def _reset_challenge_item(self, display_item: ChallengeDisplayItem) -> None:
+        removed = False
+        for challenge in display_item.challenges:
+            removed = self.challenge_date_overrides.pop(self._challenge_override_key(challenge), None) is not None or removed
+        if not removed:
+            return
+        self._apply_challenge_filter()
+        self.statusBar().showMessage(
+            f"Reset target {display_item.target_text or '(none)'} across {len(display_item.challenges)} challenge row(s)"
+        )
 
     def _event_override_key(self, event: GameEventRecord) -> tuple[str, int]:
         return (_normalize_path_text(event.source_file), event.row_index)
@@ -1096,6 +2521,40 @@ class MainWindow(QMainWindow):
     def _event_sort_start_time(self, event: GameEventRecord) -> str:
         return self._event_start_time(event) or ""
 
+    def _drop_override_key(self, drop: GameEventDrop) -> tuple[str, int]:
+        return (_normalize_path_text(drop.source_file), drop.row_index)
+
+    def _has_drop_override(self, drop: GameEventDrop) -> bool:
+        return self._drop_override_key(drop) in self.drop_date_overrides
+
+    def _drop_override(self, drop: GameEventDrop) -> EventDateOverride | None:
+        return self.drop_date_overrides.get(self._drop_override_key(drop))
+
+    def _drop_start_date(self, drop: GameEventDrop) -> str:
+        override = self._drop_override(drop)
+        return override.start_date if override is not None else drop.start_date
+
+    def _drop_start_time(self, drop: GameEventDrop) -> str:
+        override = self._drop_override(drop)
+        return override.start_time if override is not None else drop.start_time
+
+    def _drop_end_date(self, drop: GameEventDrop) -> str:
+        override = self._drop_override(drop)
+        return override.end_date if override is not None else drop.end_date
+
+    def _drop_end_time(self, drop: GameEventDrop) -> str:
+        override = self._drop_override(drop)
+        return override.end_time if override is not None else drop.end_time
+
+    def _drop_start_text(self, drop: GameEventDrop) -> str:
+        return _join_datetime(self._drop_start_date(drop), self._drop_start_time(drop))
+
+    def _drop_end_text(self, drop: GameEventDrop) -> str:
+        return _join_datetime(self._drop_end_date(drop), self._drop_end_time(drop))
+
+    def _validate_drop_override(self, override: EventDateOverride) -> None:
+        self._validate_date_override(override)
+
     def _show_event_context_menu(self, position) -> None:
         item = self.event_table.itemAt(position)
         if item is None:
@@ -1109,10 +2568,13 @@ class MainWindow(QMainWindow):
         self.event_table.selectRow(row_index)
 
         menu = QMenu(self)
+        challenges_action = menu.addAction("Open Linked Challenges")
         edit_action = menu.addAction("Edit Date/Time")
         reset_action = menu.addAction("Reset Edited Date/Time")
         reset_action.setEnabled(any(self._has_override(event) for event in display_item.events))
         selected_action = menu.exec_(self.event_table.viewport().mapToGlobal(position))
+        if selected_action == challenges_action:
+            self._open_event_challenges(display_item)
         if selected_action == edit_action:
             self._edit_event_dates(display_item)
         elif selected_action == reset_action:
@@ -1195,8 +2657,12 @@ class MainWindow(QMainWindow):
         if self.current_dataset is None:
             QMessageBox.warning(self, "Export Modified LVST", "Load game event data first.")
             return
-        if not self.date_overrides:
-            QMessageBox.information(self, "Export Modified LVST", "There are no edited schedule rows to export.")
+        if not self.date_overrides and not self.challenge_date_overrides and not self.drop_date_overrides:
+            QMessageBox.information(
+                self,
+                "Export Modified LVST",
+                "There are no edited schedule, challenge, or drop rows to export.",
+            )
             return
         output_text = self.output_dir_edit.text().strip()
         if not output_text:
@@ -1208,22 +2674,46 @@ class MainWindow(QMainWindow):
         source_to_event: dict[tuple[str, int], GameEventRecord] = {
             self._event_override_key(event): event for event in self.current_dataset.events
         }
-        patches_by_file: dict[str, list[tuple[int, EventDateOverride]]] = {}
+        source_to_challenge: dict[tuple[str, int], GameEventChallenge] = {}
+        for challenge in self.current_dataset.challenges:
+            source_to_challenge.setdefault(self._challenge_override_key(challenge), challenge)
+        source_to_drop: dict[tuple[str, int], GameEventDrop] = {}
+        for drop in self.current_dataset.drops:
+            source_to_drop.setdefault(self._drop_override_key(drop), drop)
+
+        schedule_patches_by_file: dict[str, list[tuple[int, EventDateOverride]]] = {}
         for key, override in self.date_overrides.items():
             event = source_to_event.get(key)
             if event is None:
                 continue
-            patches_by_file.setdefault(_normalize_path_text(event.source_file), []).append((event.row_index, override))
+            schedule_patches_by_file.setdefault(_normalize_path_text(event.source_file), []).append((event.row_index, override))
 
-        if not patches_by_file:
+        challenge_patches_by_file: dict[str, list[tuple[int, EventDateOverride]]] = {}
+        for key, override in self.challenge_date_overrides.items():
+            challenge = source_to_challenge.get(key)
+            if challenge is None:
+                continue
+            challenge_patches_by_file.setdefault(_normalize_path_text(challenge.source_file), []).append(
+                (challenge.row_index, override)
+            )
+
+        drop_patches_by_file: dict[str, list[tuple[int, EventDateOverride]]] = {}
+        for key, override in self.drop_date_overrides.items():
+            drop = source_to_drop.get(key)
+            if drop is None:
+                continue
+            drop_patches_by_file.setdefault(_normalize_path_text(drop.source_file), []).append((drop.row_index, override))
+
+        if not schedule_patches_by_file and not challenge_patches_by_file and not drop_patches_by_file:
             QMessageBox.information(self, "Export Modified LVST", "No exportable edited rows were found.")
             return
 
+        all_source_files = sorted(set(schedule_patches_by_file) | set(challenge_patches_by_file) | set(drop_patches_by_file))
         exported_files: list[str] = []
         try:
             QApplication.setOverrideCursor(Qt.WaitCursor)
             self.statusBar().showMessage("Exporting modified LVST files...")
-            for source_file_text, row_patches in sorted(patches_by_file.items()):
+            for source_file_text in all_source_files:
                 source_path = Path(source_file_text)
                 if not source_path.exists():
                     raise ValueError(f"Source LVST does not exist: {source_file_text}")
@@ -1233,7 +2723,7 @@ class MainWindow(QMainWindow):
 
                 data = bytearray(source_path.read_bytes())
                 table = parse_ace_table(source_path)
-                for row_index, override in sorted(row_patches, key=lambda item: item[0]):
+                for row_index, override in sorted(schedule_patches_by_file.get(source_file_text, []), key=lambda item: item[0]):
                     patch_ace_table_u32_cell_in_data(
                         data,
                         table,
@@ -1262,6 +2752,72 @@ class MainWindow(QMainWindow):
                         data,
                         table,
                         SCHEDULE_END_TIME,
+                        row_index,
+                        encode_time_text(override.end_time),
+                        allowed_types={LVSTColumnType.TIME},
+                    )
+                for row_index, override in sorted(challenge_patches_by_file.get(source_file_text, []), key=lambda item: item[0]):
+                    patch_ace_table_u32_cell_in_data(
+                        data,
+                        table,
+                        CHALLENGE_START_DATE,
+                        row_index,
+                        encode_date_text(override.start_date),
+                        allowed_types={LVSTColumnType.DATE},
+                    )
+                    patch_ace_table_u32_cell_in_data(
+                        data,
+                        table,
+                        CHALLENGE_START_TIME,
+                        row_index,
+                        encode_time_text(override.start_time),
+                        allowed_types={LVSTColumnType.TIME},
+                    )
+                    patch_ace_table_u32_cell_in_data(
+                        data,
+                        table,
+                        CHALLENGE_END_DATE,
+                        row_index,
+                        encode_date_text(override.end_date),
+                        allowed_types={LVSTColumnType.DATE},
+                    )
+                    patch_ace_table_u32_cell_in_data(
+                        data,
+                        table,
+                        CHALLENGE_END_TIME,
+                        row_index,
+                        encode_time_text(override.end_time),
+                        allowed_types={LVSTColumnType.TIME},
+                    )
+                for row_index, override in sorted(drop_patches_by_file.get(source_file_text, []), key=lambda item: item[0]):
+                    patch_ace_table_u32_cell_in_data(
+                        data,
+                        table,
+                        DROP_START_DATE,
+                        row_index,
+                        encode_date_text(override.start_date),
+                        allowed_types={LVSTColumnType.DATE},
+                    )
+                    patch_ace_table_u32_cell_in_data(
+                        data,
+                        table,
+                        DROP_START_TIME,
+                        row_index,
+                        encode_time_text(override.start_time),
+                        allowed_types={LVSTColumnType.TIME},
+                    )
+                    patch_ace_table_u32_cell_in_data(
+                        data,
+                        table,
+                        DROP_END_DATE,
+                        row_index,
+                        encode_date_text(override.end_date),
+                        allowed_types={LVSTColumnType.DATE},
+                    )
+                    patch_ace_table_u32_cell_in_data(
+                        data,
+                        table,
+                        DROP_END_TIME,
                         row_index,
                         encode_time_text(override.end_time),
                         allowed_types={LVSTColumnType.TIME},

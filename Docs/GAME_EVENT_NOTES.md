@@ -258,6 +258,206 @@ For several key shared resources, the `-13` versions are much smaller:
   - `-3`: `0x09c3ff / 0x20f3a8`
   - `-13`: `0x013964 / 0x05ccec`
 
+## `DPL_TSS_DROP_ITEM` / `0x761b5e0d`
+
+### Resource role
+
+`0x761b5e0d` resolves to:
+
+- `DPL_TSS_DROP_ITEM`
+
+The unpacked resource contains:
+
+- `0.lvst`
+
+This table is present in these TSS packages:
+
+- `NPWR04428_00-1`
+- `NPWR04428_00-3`
+- `NPWR04428_00-5`
+- `NPWR04428_00-7`
+- `NPWR04428_00-9`
+- `NPWR04428_00-11`
+- `NPWR04428_00-13`
+
+Current best reading: this resource defines limited-time item / aircraft / skin drop event schedules and their reward pools. It is not a normal rectangular table semantically. Its columns form several independent subtables, distinguished by each column's own `row_count`.
+
+### Package variants
+
+Observed structures:
+
+| Package family | Rows | Columns | Row-count groups |
+|---|---:|---:|---|
+| `-1 / -5 / -9` | `696` | `44` | `696x16`, `187x9`, `132x8`, `128x3`, `65x1`, `54x1`, `10x6` |
+| `-3 / -7 / -11` | `1155` | `41` | `1155x8`, `128x3`, `98x2`, `47x6`, `24x8`, `10x6`, `8x8` |
+| `-13` | `128` | `20` | `128x3`, `14x6`, `7x5`, `2x6` |
+
+The current ACETable parser repeats shorter columns modulo their own `row_count` when constructing whole rows. That is useful for visual inspection, but dangerous for semantic analysis. For this table, each row-count group should be treated as a separate logical subtable.
+
+### Confirmed common column names
+
+The following column names are confirmed from already known LVST naming patterns:
+
+| Hash | Meaning |
+|---|---|
+| `0x72B5C53E` | `BeginDate` |
+| `0xC3649538` | `BeginTime` |
+| `0xEC64C9A0` | `EndDate` |
+| `0x5DB599A6` | `EndTime` |
+
+The following text hashes in this table resolve to event/drop titles:
+
+| Hash | Label | US |
+|---|---|---|
+| `0x418EB201` | `Info_EventTitle_9_2` | `Item Drop Event` |
+| `0x4CCD94D8` | `Info_EventTitle_9_1` | `Limited Time Special Item Drop Event` |
+| `0xB5A4488E` | `Info_EventTitle_9` | `Limited Time Special Skin & Item Drop Event` |
+| `0x892AE884` | `Info_EventTitle_7` | `Limited Time Aircraft Drop F-14A -Zipang-` |
+
+The following hashes appear in the small newcomer/drop-message group:
+
+| Hash | Label family |
+|---|---|
+| `0xFB5EF2AB` | `DlgMsg_NewComerDrop_005_1` |
+| `0xF61DD472` | `DlgMsg_NewComerDrop_005_2` |
+| `0xF2DCC9C5` | `DlgMsg_NewComerDrop_005_3` |
+| `0xEC9B99C0` | `DlgMsg_NewComerDrop_005_4` |
+| `0x98910355` | `DlgMsg_NewComerDrop_006` |
+
+### Large branch `-1 / -5 / -9` subtables
+
+#### Schedule / drop-event header group
+
+In the large branch this group has `187` rows and `9` columns:
+
+| Hash | Current interpretation |
+|---|---|
+| `0xFAE44CAC` | drop event id / schedule id |
+| `0x72B5C53E` | begin date |
+| `0xC3649538` | begin time |
+| `0xEC64C9A0` | end date |
+| `0x5DB599A6` | end time |
+| `0x535350D8` | unknown numeric flag / category |
+| `0x582550E2` | unknown numeric flag / category |
+| `0x28F3D7F7` | unknown numeric flag |
+| `0x66A9F6E3` | title text hash |
+
+Example rows from `NPWR04428_00-1/0x761b5e0d/0.lvst`:
+
+| Row | ID | Start | End | Title hash | Resolved title |
+|---:|---:|---|---|---|---|
+| `0` | `10100` | `2016-04-01 08:00:00` | `2016-04-11 08:00:00` | `0x418EB201` | `Item Drop Event` |
+| `185` | `1603110330` | `2016-03-11 08:00:00` | `2016-03-30` | `0x4CCD94D8` | `Limited Time Special Item Drop Event` |
+| `186` | `1602290330` | `2016-02-29 08:00:00` | `2016-03-30` | `0x4CCD94D8` | `Limited Time Special Item Drop Event` |
+
+`-13` contains the earliest-style rows:
+
+| Row | ID | Start | End | Title hash | Resolved title |
+|---:|---:|---|---|---|---|
+| `0` | `2014051402` | `2014-05-15 13:00:00` | `2014-05-16 12:00:00` | `0xB5A4488E` | `Limited Time Special Skin & Item Drop Event` |
+| `1` | `2014051401` | `2014-05-14 13:00:00` | `2014-05-16 12:00:00` | `0x892AE884` | `Limited Time Aircraft Drop F-14A -Zipang-` |
+
+#### Main drop reward/detail group
+
+In the large branch this group has `696` rows and `16` columns:
+
+| Hash | Current interpretation |
+|---|---|
+| `0xED3F9249` | drop group / pool id |
+| `0xA11C8F88` | item id / reward id |
+| `0x202AF4FF` | quantity / amount / parameter |
+| `0x98A33E0A` | weight / probability / order-like parameter |
+| `0x30B22214` | fixed parameter, often `100000` |
+| `0x8E9F12E1` | related id, often `1602xxxx` |
+| `0xD0BB76C9` | enable flag, often `1` |
+| `0x1372FCCF` | currently always empty in inspected large-branch rows |
+| `0x597E3E2F` | linked schedule id, e.g. `10100`, `10101`, ... |
+| `0x155D23EE` | second item id / reward id |
+| `0xCFBC695D` | second quantity / amount / parameter |
+| `0xF3D807CE` | second weight / probability / order-like parameter |
+| `0x5BCFB279` | second fixed parameter, often `100000` |
+| `0x74E17217` | second related id, often `1602xxxx` |
+| `0xBBC6E6A4` | second enable flag, often `1` |
+| `0xCB202110` | currently always empty in inspected large-branch rows |
+
+This group appears to store one or two reward entries per row. The two halves have strongly parallel structure:
+
+- first half: `A11C8F88 / 202AF4FF / 98A33E0A / 30B22214 / 8E9F12E1 / D0BB76C9`
+- second half: `155D23EE / CFBC695D / F3D807CE / 5BCFB279 / 74E17217 / BBC6E6A4`
+
+`0x597E3E2F` likely links a reward row back to the schedule/event id from `0xFAE44CAC`.
+
+#### Secondary drop reward/detail group
+
+In the large branch this group has `132` rows and `8` columns:
+
+| Hash | Current interpretation |
+|---|---|
+| `0x45573124` | `DropId` / parent drop id |
+| `0xE837AF5F` | item id / reward id |
+| `0x3FD28994` | quantity / amount / parameter |
+| `0x148033C7` | weight / probability / order-like parameter |
+| `0xE5FF084E` | unknown, sometimes `-1`, `1000`, `2000` |
+| `0xC5EB6863` | related id, often `1603xxxx` |
+| `0x05F65C93` | enable flag / condition flag |
+| `0x2AC423F3` | related item/id, often `2099454` in sampled rows |
+
+The confirmed Ulysses name for `0x45573124` is `DropId`.
+
+Example from `-13`:
+
+| Row | DropId | Item/reward | Amount | Weight/param |
+|---:|---:|---:|---:|---:|
+| `0` | `2014051401` | `67108905` | `1` | `10` |
+| `1` | `2014051401` | `65597` | `2000` | `70` |
+| `2` | `2014051402` | `67108905` | `1` | `10` |
+
+This suggests `DropId` groups multiple concrete reward rows under one drop event.
+
+#### Common parameter group
+
+In all inspected variants this group has `128` rows and `3` columns:
+
+| Hash | Current interpretation |
+|---|---|
+| `0xE0920634` | common item / parameter id |
+| `0xD1494DF0` | count / rank / category |
+| `0xB07C3C79` | numeric parameter |
+
+Example values include:
+
+- `0xE0920634 = 4194321`
+- `0xD1494DF0 = 10`
+- `0xB07C3C79 = 307`
+
+This group is stable across branches and looks more like a shared parameter table than a per-event schedule.
+
+#### Newcomer / guided drop message group
+
+In all inspected variants this group has `10` rows and `6` columns:
+
+| Hash | Current interpretation |
+|---|---|
+| `0xF241A7FF` | sequence id, usually `1..10` |
+| `0xA4821156` | item id / reward id |
+| `0x8BE66B87` | amount / quantity |
+| `0x8E58DB65` | flag, often `1` |
+| `0x82A930C9` | parameter, often `1000` |
+| `0xBD61A638` | dialog/message hash |
+
+Resolved message hashes are in the `DlgMsg_NewComerDrop_*` family, so this group is likely for newcomer/login/tutorial-style drop rewards rather than normal event schedules.
+
+### Editing caution
+
+For this resource, date edits should be applied only to the schedule/header subtable columns:
+
+- `0x72B5C53E`
+- `0xC3649538`
+- `0xEC64C9A0`
+- `0x5DB599A6`
+
+The rest of the table should not be rewritten as a single rectangular row list. Rebuilding it that way risks duplicating modulo-expanded values into shorter subtables and corrupting the intended column-local row counts.
+
 This strongly suggests `-13` is a reduced hot-update core layer rather than a full shared-core clone.
 
 ### 4-resource overlay: `-14`
